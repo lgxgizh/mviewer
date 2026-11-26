@@ -1,4 +1,4 @@
-﻿; MViewer.nsi - M11.3 Release Engineering
+; MViewer.nsi - M11.3 Release Engineering
 ;
 ; NSIS installer for MViewer. Expects a pre-deployed application directory
 ; (produced by scripts/package_portable.ps1 staging: MViewer.exe + Qt DLLs +
@@ -159,4 +159,7 @@ Section "Uninstall"
   !insertmacro UnassocExt "raw"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
   DeleteRegKey HKLM "Software\${APPNAME}"
+  ; Same shell refresh the install path does: without it Explorer keeps the
+  ; stale icons and the removed associations look still-registered.
+  System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 SectionEnd

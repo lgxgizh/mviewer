@@ -661,6 +661,8 @@ void PreviewPanel::decodePreviewWorker(
     if (ctx.isCancelled())
         return;
     const mviewer::core::PreviewStats stats = mviewer::core::computePreviewStats(loaded.img);
+    if (!qApp)
+        return; // teardown: no event loop left to deliver into
     QMetaObject::invokeMethod(qApp,
                               [path, gen, guard, lifetime, stats]()
                               {

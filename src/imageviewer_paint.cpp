@@ -444,11 +444,17 @@ mviewer::core::TileScreenPlacement placedTile(const Viewport &tileView, const Ti
 
 void blitPlacedTile(QOpenGLTextureBlitter &blitter, ImageBlitterShader *shader,
                     GpuTileUploader &gpu, uintptr_t handle,
-                    const mviewer::core::TileScreenPlacement &placed, const QRect &viewportRect)
+                    const mviewer::core::TileScreenPlacement &placed, const QRect &viewportRect,
+                    qreal deviceScale)
 {
     if (!placed.valid || handle == 0)
         return;
-    const bool magnified = placed.screenW > placed.contentW || placed.screenH > placed.contentH;
+    // screen* are logical widget pixels, content* are texture texels: compare in
+    // one unit. On a HiDPI display the logical rect is smaller than its device
+    // size, so ignoring the ratio reported "minified" for tiles that were in fact
+    // enlarged and filtered them smoothly.
+    const bool magnified = placed.screenW * deviceScale > placed.contentW ||
+                           placed.screenH * deviceScale > placed.contentH;
     gpu.setMagnifyNearest(handle, magnified);
     const QRect destination(placed.screenX, placed.screenY, placed.screenW, placed.screenH);
     const bool fullTexture = placed.contentX == 0 && placed.contentY == 0 &&
@@ -478,12 +484,14 @@ void blitPlacedTile(QOpenGLTextureBlitter &blitter, ImageBlitterShader *shader,
 }
 
 void drawPlacedCpuTile(QPainter &painter, const QImage &image,
-                       const mviewer::core::TileScreenPlacement &placed)
+                       const mviewer::core::TileScreenPlacement &placed, qreal deviceScale)
 {
     if (!placed.valid || image.isNull())
         return;
     painter.save();
-    const bool magnified = placed.screenW > placed.contentW || placed.screenH > placed.contentH;
+    // Same unit correction as the GL path: logical screen rect vs texture texels.
+    const bool magnified = placed.screenW * deviceScale > placed.contentW ||
+                           placed.screenH * deviceScale > placed.contentH;
     painter.setRenderHint(QPainter::SmoothPixmapTransform, !magnified);
     const QRect screen(placed.screenX, placed.screenY, placed.screenW, placed.screenH);
     const bool apron = placed.contentX != 0 || placed.contentY != 0 ||
@@ -546,7 +554,8 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
             continue;
         const auto handle = m_gpu.handle(rt.key);
         const auto placed = placedTile(tileView, m_tiles, rt, rt.data.width, rt.data.height);
-        blitPlacedTile(*m_blitter, shader, m_gpu, handle, placed, viewportRect);
+        blitPlacedTile(*m_blitter, shader, m_gpu, handle, placed, viewportRect,
+                       devicePixelRatioF() > 1.0 ? devicePixelRatioF() : 1.0);
     }
     if (shader == nullptr)
         m_blitter->release();
@@ -565,7 +574,8 @@ void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::R
             continue;
         const QImage image = mvcore::toQImageFast(rt.data);
         const auto placed = placedTile(tileView, m_tiles, rt, image.width(), image.height());
-        drawPlacedCpuTile(painter, image, placed);
+        drawPlacedCpuTile(painter, image, placed,
+                          devicePixelRatioF() > 1.0 ? devicePixelRatioF() : 1.0);
     }
 }
 

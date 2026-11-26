@@ -22,7 +22,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = 'D:\mviewer'
 $bench = Join-Path $BuildDir 'bin\mviewer_bench.exe'
 if (-not (Test-Path $bench)) {
     Write-Host "ERROR: bench binary not found at $bench — run build.ps1 Release first."

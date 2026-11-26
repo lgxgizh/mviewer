@@ -17,6 +17,17 @@
 #include <cmath>
 constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP analysis cap
 
+namespace
+{
+void dropAnalysisPreload(mviewer::application::ImageLoadingService::AsyncRequestHandle &pending)
+{
+    // Dropping the shared_ptr alone leaves the request running (the worker holds
+    // its own reference), so a discarded preload used to decode for nothing.
+    if (pending)
+        mviewer::application::ImageLoadingService::instance().cancelAsync(pending);
+}
+} // namespace
+
 // Global: imageviewer.h forward-declares RasterRequest for runRasterWorker.
 struct RasterRequest
 {
@@ -661,7 +672,7 @@ void ImageViewer::ensureAnalysisLoad()
                           static_cast<qint64>(m_raster.sourceSize.height());
     // Over the cap: refuse, and drop a retained full preload so it cannot land.
     if (m_lodMode && pixels > kAnalysisFeasiblePixels)
-        m_pendingAnalysisPreload.reset();
+        dropAnalysisPreload(m_pendingAnalysisPreload);
     else
         issueAnalysisLoad(m_currentPath, m_requestGen);
     m_analysisLoadIssued = true;
@@ -681,7 +692,7 @@ void ImageViewer::runAnalysisLoadDecision(bool sourceValid, const QSize &sourceS
         (lod && pixels > kAnalysisFeasiblePixels))
         ensureAnalysisLoad();
     else
-        m_pendingAnalysisPreload.reset();
+        dropAnalysisPreload(m_pendingAnalysisPreload);
 }
 
 PixelRGBA ImageViewer::sampleAnalysisPixel(int ix, int iy) const

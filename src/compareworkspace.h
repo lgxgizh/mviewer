@@ -384,7 +384,8 @@ class CompareWorkspace : public QWidget
     bool isSplitOrSwipe() const;
     void updateCanvasModeVisibility();
     void paintCompareCanvas();
-    QImage compositeCanvasWithGl(const QRect &canvasRect, const QSize &physical, qreal dpr);
+    QImage compositeCanvasWithGl(const QByteArray &cacheKey, const QRect &canvasRect,
+                                 const QSize &physical, qreal dpr);
     void drawCanvasModeDivider(QPainter &p, const QRect &canvasRect);
     QRect canvasRect() const;
     bool canvasEventFilter(QEvent *event);

@@ -57,7 +57,7 @@ void CompareWorkspace::paintCompareCanvas()
     // "which pixels of A and B land where" moves into a fragment shader.
     if (mviewer::ui::CompareCompositeGL::requested())
     {
-        const QImage gpu = compositeCanvasWithGl(r, physical, dpr);
+        const QImage gpu = compositeCanvasWithGl(key, r, physical, dpr);
         if (!gpu.isNull())
         {
             QPainter p(cv);

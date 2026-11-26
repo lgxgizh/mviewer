@@ -17,7 +17,9 @@
 # Exit 0 = clean; exit 1 = forbidden include found.
 
 $ErrorActionPreference = 'Stop'
-$repo = 'D:\mviewer'
+# Repository root is this script's grandparent; -Repo overrides it.
+param([string]$Repo = (Split-Path -Parent $PSScriptRoot))
+$repo = $Repo
 $forbidden = @('QWidget', 'QPainter', 'QPixmap', 'QMainWindow', 'QGraphicsView',
                'QGraphicsScene', 'QFrame', 'QScrollArea', 'QDialog')
 $warn = @('QImage', 'QPicture', 'QBitmap')

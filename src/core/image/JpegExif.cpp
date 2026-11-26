@@ -124,9 +124,11 @@ bool nextMarker(const std::vector<uint8_t> &jpeg, size_t pos, Marker &marker)
     uint16_t length = 0;
     if (!readBe16(jpeg, pos + 2, length) || length < 2)
         return false;
-    const size_t end = pos + 2 + static_cast<size_t>(length);
-    if (end > jpeg.size())
+    // Subtraction form: pos + 2 + length is checked before it can wrap.
+    const size_t headerEnd = pos + 2;
+    if (headerEnd > jpeg.size() || static_cast<size_t>(length) > jpeg.size() - headerEnd)
         return false;
+    const size_t end = headerEnd + static_cast<size_t>(length);
     marker.payload = true;
     marker.content = pos + 4;
     marker.end = end;

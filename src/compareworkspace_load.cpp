@@ -35,21 +35,32 @@ void runCompareCapabilityProbe(const std::shared_ptr<CompareLoadBatch> &batch, s
             return;
         }
 
-        std::unique_lock<std::mutex> lk(batch->handlesMutex);
-        if (ctx.isCancelled())
-            return;
-
-        const qint64 pixels =
-            source ? static_cast<qint64>(source->metadata().width) * source->metadata().height : 0;
-        if (source && pixels > kCompareAnalysisFeasiblePixels)
+        bool skip = false;
         {
-            batch->infeasible->fetch_add(1, std::memory_order_relaxed);
-            (*batch->frames)[i] = std::make_shared<ImageFrame>(source->metadata(), ImageData());
-            lk.unlock();
+            std::unique_lock<std::mutex> lk(batch->handlesMutex);
+            if (ctx.isCancelled())
+                return;
+
+            const qint64 pixels =
+                source ? static_cast<qint64>(source->metadata().width) * source->metadata().height
+                       : 0;
+            if (source && pixels > kCompareAnalysisFeasiblePixels)
+            {
+                batch->infeasible->fetch_add(1, std::memory_order_relaxed);
+                (*batch->frames)[i] =
+                    std::make_shared<ImageFrame>(source->metadata(), ImageData());
+                skip = true;
+            }
+        }
+        if (skip)
+        {
             account(false);
             return;
         }
 
+        // Submitted WITHOUT handlesMutex: cancelLoadBatch() takes that mutex and
+        // can run on this thread through the submit path, so holding it here is a
+        // self-deadlock waiting to happen.
         mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
         bool rejected = false;
         try
@@ -61,8 +72,10 @@ void runCompareCapabilityProbe(const std::shared_ptr<CompareLoadBatch> &batch, s
         {
             rejected = true;
         }
-        request->handle = std::move(handle);
-        lk.unlock();
+        {
+            std::lock_guard<std::mutex> lk(batch->handlesMutex);
+            request->handle = std::move(handle);
+        }
         if (rejected)
             account(true);
     }

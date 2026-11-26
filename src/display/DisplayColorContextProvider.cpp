@@ -173,6 +173,29 @@ std::vector<uint8_t> loadLinuxIccProfile(const QWindow *window)
         dirs << QString::fromLocal8Bit(home) + QStringLiteral("/.config/color/icc");
     dirs << QStringLiteral("/usr/share/color/icc") << QStringLiteral("/var/lib/colord/icc");
 
+    // Pick within a directory: a file whose stem names this display wins, a
+    // single candidate needs no guessing, and otherwise the name-sorted first
+    // stays but is reported - there is no per-window ICM on Linux, so the user
+    // must be able to see which profile was taken.
+    const QString identity =
+        window ? (window->screen()->name() + QLatin1Char(' ') + window->screen()->manufacturer() +
+                  QLatin1Char(' ') + window->screen()->model())
+               : QString();
+    auto score = [&identity](const QString &stem)
+    {
+        if (identity.isEmpty())
+            return 0;
+        int hits = 0;
+        for (const QString &token : identity.split(QLatin1Char(' '), Qt::SkipEmptyParts))
+        {
+            if (token.size() < 3)
+                continue;
+            if (stem.contains(token, Qt::CaseInsensitive))
+                ++hits;
+        }
+        return hits;
+    };
+
     for (const QString &dir : dirs)
     {
         QDir candidate(dir);
@@ -181,11 +204,28 @@ std::vector<uint8_t> loadLinuxIccProfile(const QWindow *window)
         const QFileInfoList entries =
             candidate.entryInfoList(QStringList{QStringLiteral("*.icc"), QStringLiteral("*.icm")},
                                     QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
-        for (const QFileInfo &info : entries)
+        if (entries.isEmpty())
+            continue;
+        const QFileInfo *chosen = &entries.first();
+        if (entries.size() > 1)
         {
-            if (auto bytes = readBounded(info.absoluteFilePath()); !bytes.empty())
-                return bytes;
+            int best = -1;
+            for (const QFileInfo &info : entries)
+            {
+                const int s = score(info.completeBaseName());
+                if (s > best)
+                {
+                    best = s;
+                    chosen = &info;
+                }
+            }
+            if (best <= 0)
+                qInfo().noquote() << "[DisplayColor] Several ICC profiles in" << dir
+                                  << "- using" << chosen->absoluteFilePath()
+                                  << "(set MVIEWER_ICC to choose explicitly)";
         }
+        if (auto bytes = readBounded(chosen->absoluteFilePath()); !bytes.empty())
+            return bytes;
     }
     return {};
 }

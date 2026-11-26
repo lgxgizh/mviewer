@@ -97,20 +97,17 @@ bool readHeaderLine(std::istream &in, std::string &line, std::string &error)
         }
         if (line.size() >= cap::kMaxPfmHeaderLine)
         {
-            error = "PFM header line is too long";
-            return false;
+            error = "PFM header line is too long"; return false;
         }
         line.push_back(c);
     }
     if (in.bad())
     {
-        error = "cannot read PFM header";
-        return false;
+        error = "cannot read PFM header"; return false;
     }
     if (!any)
     {
-        error = "truncated PFM header";
-        return false;
+        error = "truncated PFM header"; return false;
     }
     if (!line.empty() && line.back() == '\r')
         line.pop_back();
@@ -125,22 +122,19 @@ bool readBoundedExr(std::ifstream &in, std::vector<std::uint8_t> &file, std::str
     const std::streamoff length = in.tellg();
     if (length < 0)
     {
-        error = "cannot size OpenEXR input";
-        return false;
+        error = "cannot size OpenEXR input"; return false;
     }
     const auto bytes = static_cast<std::uint64_t>(length);
     if (bytes > cap::kMaxExrInputBytes ||
         bytes > static_cast<std::uint64_t>((std::numeric_limits<size_t>::max)()) ||
         bytes > static_cast<std::uint64_t>((std::numeric_limits<std::streamsize>::max)()))
     {
-        error = "OpenEXR input exceeds the read limit";
-        return false;
+        error = "OpenEXR input exceeds the read limit"; return false;
     }
     in.seekg(0, std::ios::beg);
     if (!in)
     {
-        error = "cannot rewind OpenEXR input";
-        return false;
+        error = "cannot rewind OpenEXR input"; return false;
     }
     file.resize(static_cast<size_t>(bytes));
     if (bytes != 0)
@@ -149,15 +143,13 @@ bool readBoundedExr(std::ifstream &in, std::vector<std::uint8_t> &file, std::str
         if (static_cast<std::uint64_t>(in.gcount()) != bytes)
         {
             file.clear();
-            error = "short OpenEXR read";
-            return false;
+            error = "short OpenEXR read"; return false;
         }
     }
     if (in.get() != std::char_traits<char>::eof())
     {
         file.clear();
-        error = "OpenEXR input grew during read";
-        return false;
+        error = "OpenEXR input grew during read"; return false;
     }
     in.clear();
     return true;
@@ -271,8 +263,7 @@ bool readExrChannels(const std::uint8_t *value, size_t size, std::vector<ExrChan
             break;
         if (channels.size() >= cap::kMaxExrChannels)
         {
-            error = "OpenEXR has too many channels";
-            return false;
+            error = "OpenEXR has too many channels"; return false;
         }
         ExrChannel c;
         const size_t copy = len < sizeof(c.name) - 1 ? len : sizeof(c.name) - 1;
@@ -313,23 +304,20 @@ bool parseExrHeader(const std::vector<std::uint8_t> &file, size_t &pos, ExrHeade
         std::string name;
         if (!readString(name))
         {
-            error = "truncated OpenEXR header";
-            return false;
+            error = "truncated OpenEXR header"; return false;
         }
         if (name.empty())
             break; // end of header
         std::string type;
         if (!readString(type) || file.size() - pos < 4)
         {
-            error = "truncated OpenEXR attribute";
-            return false;
+            error = "truncated OpenEXR attribute"; return false;
         }
         const int32_t size = readI32(&file[pos]);
         pos += 4;
         if (size < 0 || static_cast<std::uint64_t>(size) > file.size() - pos)
         {
-            error = "invalid OpenEXR attribute size";
-            return false;
+            error = "invalid OpenEXR attribute size"; return false;
         }
         const std::uint8_t *value = &file[pos];
         if (name == "channels")
@@ -341,8 +329,7 @@ bool parseExrHeader(const std::vector<std::uint8_t> &file, size_t &pos, ExrHeade
         {
             if (size < 16)
             {
-                error = "invalid OpenEXR dataWindow";
-                return false;
+                error = "invalid OpenEXR dataWindow"; return false;
             }
             out.minX = readI32(value);
             out.minY = readI32(value + 4);
@@ -384,8 +371,7 @@ bool exrOutputBudget(const std::vector<std::uint8_t> &file,
     if (lineFloats > static_cast<std::uint64_t>(cap::kMaxHdrEdge) *
                          static_cast<std::uint64_t>(cap::kMaxExrChannels))
     {
-        error = "OpenEXR scanline exceeds the allocation budget";
-        return false;
+        error = "OpenEXR scanline exceeds the allocation budget"; return false;
     }
     std::uint64_t sampleBytes = 0;
     for (const ExrChannel &channel : channels)
@@ -398,15 +384,13 @@ bool exrOutputBudget(const std::vector<std::uint8_t> &file,
     {
         if (offset > fileBytes || fileBytes - offset < 8)
         {
-            error = "truncated OpenEXR scanline";
-            return false;
+            error = "truncated OpenEXR scanline"; return false;
         }
         const int32_t dataSize = readI32(&file[static_cast<size_t>(offset) + 4]);
         if (dataSize < 0 || static_cast<std::uint64_t>(dataSize) < lineBytes ||
             static_cast<std::uint64_t>(dataSize) > fileBytes - offset - 8)
         {
-            error = "invalid OpenEXR scanline size";
-            return false;
+            error = "invalid OpenEXR scanline size"; return false;
         }
         spans.emplace_back(offset, offset + 8 + static_cast<std::uint64_t>(dataSize));
     }
@@ -417,8 +401,7 @@ bool exrOutputBudget(const std::vector<std::uint8_t> &file,
     {
         if (spans[i].first < spans[i - 1].second)
         {
-            error = "overlapping OpenEXR scanline";
-            return false;
+            error = "overlapping OpenEXR scanline"; return false;
         }
     }
     return true;
@@ -498,10 +481,13 @@ bool decodePfmRows(std::istream &in, std::vector<float> &rgb, int width, int hei
         return false;
     }
     std::vector<std::uint8_t> raw(static_cast<size_t>(rowBytes));
-    const std::uint64_t rgbFloats =
-        static_cast<std::uint64_t>(width) * static_cast<std::uint64_t>(height) * 3ull;
+    // One float per sample, not per colour channel: a greyscale PFM used to be
+    // expanded to three floats here, tripling the buffer for no information.
+    const std::uint64_t rgbFloats = static_cast<std::uint64_t>(width) *
+                                    static_cast<std::uint64_t>(height) *
+                                    static_cast<std::uint64_t>(channels);
     rgb.assign(static_cast<size_t>(rgbFloats), 0.0f);
-    const size_t rowFloats = static_cast<size_t>(width) * 3u;
+    const size_t rowFloats = static_cast<size_t>(width) * static_cast<size_t>(channels);
     for (int y = 0; y < height; ++y)
     {
         in.read(reinterpret_cast<char *>(raw.data()), static_cast<std::streamsize>(raw.size()));
@@ -516,11 +502,9 @@ bool decodePfmRows(std::istream &in, std::vector<float> &rgb, int width, int hei
             const size_t base = static_cast<size_t>(x) * static_cast<size_t>(channels) * 4u;
             if (channels == 1)
             {
-                const float value = loadPfmSample(raw.data() + base, littleEndian, scaleFactor);
-                // Grayscale PFM writes the same sample into R, G, and B.
-                rgb[row + static_cast<size_t>(x) * 3u + 0u] = value;
-                rgb[row + static_cast<size_t>(x) * 3u + 1u] = value;
-                rgb[row + static_cast<size_t>(x) * 3u + 2u] = value;
+                // Greyscale stays single-channel; toneMapToRgb24 expands it.
+                rgb[row + static_cast<size_t>(x)] =
+                    loadPfmSample(raw.data() + base, littleEndian, scaleFactor);
             }
             else
             {
@@ -551,20 +535,40 @@ ImageData HdrDecoder::toneMapToRgb24(const std::vector<float> &rgb, int width, i
                                      const ToneMap &tone)
 {
     ImageData out = makeImageData(width, height, PixelFormat::RGB24);
+    const uint64_t pixels = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
     // 64-bit: width*height*3 overflowed int on large rasters (out-of-bounds read).
-    const uint64_t needed = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 3u;
-    if (out.isNull() || rgb.size() < needed)
+    // Accept interleaved RGB or a single sample per pixel (greyscale PFM).
+    const bool grey = rgb.size() < pixels * 3u;
+    if (out.isNull() || rgb.size() < pixels * (grey ? 1u : 3u))
         return ImageData{};
     const ImageBuffer view = out.view();
     const double invGamma = 1.0 / (tone.gamma > 0.05 ? tone.gamma : 2.2);
-    for (size_t i = 0; i < needed; ++i)
+    if (!grey)
     {
-        const double linear = static_cast<double>(rgb[i]) * tone.exposure;
+        const uint64_t needed = pixels * 3u;
+        for (size_t i = 0; i < needed; ++i)
+        {
+            const double linear = static_cast<double>(rgb[i]) * tone.exposure;
+            const double mapped = linear / (1.0 + linear);
+            double srgb = std::pow(mapped > 0.0 ? mapped : 0.0, invGamma);
+            if (!(srgb <= 1.0))
+                srgb = 1.0;
+            view.data[i] = static_cast<uint8_t>(srgb * 255.0 + 0.5);
+        }
+        return out;
+    }
+    for (uint64_t p = 0; p < pixels; ++p)
+    {
+        const double linear = static_cast<double>(rgb[p]) * tone.exposure;
         const double mapped = linear / (1.0 + linear);
         double srgb = std::pow(mapped > 0.0 ? mapped : 0.0, invGamma);
         if (!(srgb <= 1.0))
             srgb = 1.0;
-        view.data[i] = static_cast<uint8_t>(srgb * 255.0 + 0.5);
+        const auto c = static_cast<std::uint8_t>(srgb * 255.0 + 0.5);
+        const size_t o = static_cast<size_t>(p) * 3u;
+        view.data[o] = c;
+        view.data[o + 1] = c;
+        view.data[o + 2] = c;
     }
     return out;
 }
@@ -745,22 +749,25 @@ ImageData HdrDecoder::decodeScaled(const std::string &path, int maxEdge,
             static_cast<double>(maxEdge) / static_cast<double>(std::max(width, height));
         const int dw = std::max(1, static_cast<int>(std::lround(width * scale)));
         const int dh = std::max(1, static_cast<int>(std::lround(height * scale)));
-        std::vector<float> small(static_cast<size_t>(dw) * static_cast<size_t>(dh) * 3u, 0.0f);
+        // Match the decoded buffer's own layout: greyscale PFM is one float per
+        // pixel, colour is three.
+        const size_t ch = rgb.size() < static_cast<size_t>(width) * height * 3u ? 1u : 3u;
+        std::vector<float> small(static_cast<size_t>(dw) * static_cast<size_t>(dh) * ch, 0.0f);
         for (int y = 0; y < dh; ++y)
         {
             for (int x = 0; x < dw; ++x)
             {
                 const int sx = std::min(width - 1, static_cast<int>(x / scale));
                 const int sy = std::min(height - 1, static_cast<int>(y / scale));
-                const size_t src = (static_cast<size_t>(sy) * static_cast<size_t>(width) +
-                                    static_cast<size_t>(sx)) *
-                                   3u;
+                const size_t src =
+                    (static_cast<size_t>(sy) * static_cast<size_t>(width) +
+                     static_cast<size_t>(sx)) *
+                    ch;
                 const size_t dst =
                     (static_cast<size_t>(y) * static_cast<size_t>(dw) + static_cast<size_t>(x)) *
-                    3u;
-                small[dst + 0u] = rgb[src + 0u];
-                small[dst + 1u] = rgb[src + 1u];
-                small[dst + 2u] = rgb[src + 2u];
+                    ch;
+                for (size_t c = 0; c < ch; ++c)
+                    small[dst + c] = rgb[src + c];
             }
         }
         return toneMapToRgb24(small, dw, dh, ToneMap{});

@@ -20,6 +20,15 @@ namespace
 {
 // Fallback LOD edge when the widget is unknown or the view is not zoomed out.
 constexpr int kDisplayWarmMaxEdge = 1024;
+
+void dropAnalysisPreload(mviewer::application::ImageLoadingService::AsyncRequestHandle &pending)
+{
+    // Dropping the shared_ptr alone leaves the request running (the worker holds
+    // its own reference), so a discarded preload used to decode for nothing.
+    if (pending)
+        mviewer::application::ImageLoadingService::instance().cancelAsync(pending);
+}
+
 constexpr qint64 kDisplayWarmMaxBytes = 64LL * 1024 * 1024;
 constexpr qint64 kFullPreloadMaxPixels = 48LL * 1000 * 1000;
 constexpr size_t kDisplayWarmMaxEntries = 2;
@@ -121,7 +130,7 @@ void ImageViewer::setImageImpl(const QString &path)
         m_gpu.clear();
     if (path.isEmpty())
     {
-        m_pendingAnalysisPreload.reset();
+        dropAnalysisPreload(m_pendingAnalysisPreload);
         update();
         return;
     }
@@ -135,7 +144,7 @@ void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
 {
     auto onLoaded = makeImageLoadCallback(path, generation);
     // Frame 0 is explicit. Do not let a stale preload erase that frame id.
-    m_pendingAnalysisPreload.reset();
+    dropAnalysisPreload(m_pendingAnalysisPreload);
     m_foregroundRequest = mviewer::application::ImageLoadingService::instance().loadFrameAsync(
         path.toUtf8().toStdString(), 0, std::move(onLoaded), ImageRepository::kDefaultLoadOptions,
         m_lifetime);
@@ -160,6 +169,8 @@ ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString 
 void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation,
                                         const ImageLoadGuard &guard)
 {
+    if (!qApp)
+        return; // teardown: no event loop left to deliver into
     QMetaObject::invokeMethod(qApp,
                               [path, generation, guard]()
                               {
@@ -191,6 +202,8 @@ void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation
 void ImageViewer::queueLoadedImage(const QString &path, uint64_t generation,
                                    const ImageLoadGuard &guard, const ImageLoadResult &result)
 {
+    if (!qApp)
+        return; // teardown: no event loop left to deliver into
     QMetaObject::invokeMethod(qApp,
                               [path, generation, guard, result]()
                               {

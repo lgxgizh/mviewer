@@ -410,4 +410,18 @@ QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &pa
     return out.convertToFormat(QImage::Format_ARGB32_Premultiplied);
 }
 
+QImage CompareCompositeGL::compositeCached(
+    const QByteArray &cacheKey, const std::function<void(QImage &, QImage &)> &rasterizePanes,
+    CompareCompositeMode mode, const QSize &size, int dividerX, double alpha, int checkerSize)
+{
+    if (!cacheKey.isEmpty() && cacheKey == m_cachedKey && !m_cachedImage.isNull())
+        return m_cachedImage;
+    QImage paneA;
+    QImage paneB;
+    rasterizePanes(paneA, paneB);
+    m_cachedImage = composite(mode, paneA, paneB, size, dividerX, alpha, checkerSize);
+    m_cachedKey = cacheKey;
+    return m_cachedImage;
+}
+
 } // namespace mviewer::ui

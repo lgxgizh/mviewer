@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.220** · Release tag: **v1.0.220**
+> Snapshot: 2026-11-26 · Version: **1.0.221** · Release tag: **v1.0.221**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,25 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.221 - render cache, HiDPI tile units, preload cancellation (2026-11-26)
+
+- The compare-canvas GPU composite is cached by the base-surface key: a repaint
+  with no state change no longer re-rasterises both panes and reads the framebuffer
+  back.
+- Tile magnification compares logical screen pixels against texture texels in one
+  unit; HiDPI no longer mis-classifies an enlarged tile as minified.
+- Linux ICC selection prefers a profile named after the display and reports a
+  multi-profile directory instead of taking the alphabetically first.
+- ICC version parsing no longer reads reserved bytes 10-11 as a bugfix field.
+- `CompareWorkspace` submits loads outside `handlesMutex`; a discarded analysis
+  preload is cancelled rather than dropped; `restoreWorkspaceState` disconnects its
+  ready handler explicitly instead of being consumed by an unrelated event.
+- `trimMipsToBudget` re-reads each chain under the lock before dropping it.
+- Greyscale PFM decodes at one float per sample; JpegExif bounds use subtraction;
+  NSIS uninstall refreshes the shell like the install path does.
+- Perf baseline B11 recalibrated to a measured 130 ms seed (p50 104.975 ms);
+  B20 registered as provisional/report-only.
 
 ## 1.0.220 - command-line open rejects the device namespace (2026-11-26)
 

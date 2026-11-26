@@ -13,6 +13,7 @@
 // Opt-in (`MVIEWER_COMPARE_GL=1`) until it has been compared against
 // tests/gl_baseline on real hardware.
 
+#include <QByteArray>
 #include <QImage>
 #include <QOffscreenSurface>
 #include <QOpenGLBuffer>
@@ -23,6 +24,7 @@
 #include <QSize>
 #include <QString>
 
+#include <functional>
 #include <memory>
 
 class QOpenGLFramebufferObject;
@@ -68,6 +70,16 @@ class CompareCompositeGL
     QImage composite(CompareCompositeMode mode, const QImage &paneA, const QImage &paneB,
                      const QSize &size, int dividerX, double alpha, int checkerSize);
 
+    /// Composite, reusing the last result while `cacheKey` is unchanged. A single
+    /// state change repaints the canvas several times (overlay toggles, ROI
+    /// redraws); each of those used to re-rasterise both panes, run the shader
+    /// and read the whole framebuffer back. The key must cover everything the
+    /// composite depends on, exactly like the CPU base-surface key.
+    QImage compositeCached(const QByteArray &cacheKey,
+                           const std::function<void(QImage &, QImage &)> &rasterizePanes,
+                           CompareCompositeMode mode, const QSize &size, int dividerX,
+                           double alpha, int checkerSize);
+
   private:
     QOpenGLContext m_context;
     QOffscreenSurface m_surface;
@@ -82,6 +94,8 @@ class CompareCompositeGL
     bool m_destroying = false;
     bool m_inContextTeardown = false;
     QMetaObject::Connection m_aboutToBeDestroyed;
+    QByteArray m_cachedKey; // empty = nothing cached
+    QImage m_cachedImage;
 
     bool hasGpuObjects() const;
     void abandonGpuObjects();

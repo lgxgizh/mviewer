@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+## [1.0.221] - 2026-11-26
+
+### Rendering / colour
+
+- **The compare-canvas GPU composite is now cached by the same key as the CPU
+  base surface.** Previously every repaint re-rasterised both panes, ran the
+  shader and read the whole framebuffer back even when nothing had changed.
+- **Tile magnification is compared in one unit.** `screenW/H` are logical widget
+  pixels while `contentW/H` are texture texels, so on a HiDPI display (ratio >= 2)
+  an enlarged tile was classified as minified and smoothly filtered instead of
+  using nearest.
+- **Linux ICC selection is no longer a blind alphabetical scan.** A profile whose
+  file name matches the display wins; a directory with several candidates reports
+  which one was taken instead of silently taking the first.
+- **ICC version parsing bug fixed**: bytes 10-11 of the header are reserved; they
+  were being read as a decimal bugfix field.
+- **`onDisplayScreenChanged()` keeps `adjust`** (carried from 1.0.217).
+
+### Concurrency / lifetime
+
+- **`CompareWorkspace` submits image loads without holding `handlesMutex`** — the
+  cancel path needs that mutex and could run on the same thread.
+- **A discarded analysis preload is now actually cancelled** (`cancelAsync`
+  instead of dropping the shared_ptr, which left the decode running).
+- **`restoreWorkspaceState` no longer uses `Qt::SingleShotConnection`** on
+  `imageReady`: an unrelated ready event consumed it and the restored frame index /
+  play state never applied. It disconnects explicitly once the right frame lands.
+- **`CacheManager::trimMipsToBudget` re-reads each chain under the lock before
+  dropping it**, so a concurrent store/invalidate cannot be charged twice.
+
+### Robustness / packaging
+
+- **PFM greyscale decodes as one float per sample** instead of expanding to three,
+  and the tone mapper accepts both layouts (the scaled path tracks the layout too).
+- **JpegExif marker bounds use subtraction** rather than `pos + 2 + length`.
+- **NSIS uninstall now raises `SHCNE_ASSOCCHANGED`**, like the install path, so
+  removed associations and icons are not left stale.
+- **Perf baseline B11 recalibrated** from a real measurement: 170 ms -> 130 ms
+  seeded (measured p50 104.975 ms after libjpeg-turbo). **B20** is registered as a
+  provisional (report-only) metric with an explicit note not to invent a budget.
+
+### Housekeeping
+
+- `scripts/audit_qt_boundary.ps1`, `scripts/g1_clean_windows_proof.ps1`,
+  `scripts/benchmark_dashboard.ps1` derive the repository root from their own
+  location; a dead `D:\mviewer` assignment in `benchmark/generate_bench_data.ps1`
+  is gone.
+
 ## [1.0.220] - 2026-11-26
 
 ### Security

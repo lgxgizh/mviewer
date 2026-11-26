@@ -435,6 +435,8 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
                         found.append({fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]",
                                       fi.size(), 0, 0, fi.lastModified()});
                     }
+                    if (!qApp)
+                        return; // teardown: no event loop left to deliver into
                     QMetaObject::invokeMethod(qApp,
                                               [self, alive, gen, found, t]()
                                               {

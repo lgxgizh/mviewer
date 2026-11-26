@@ -3,7 +3,8 @@
 # an index.html trend page with inline sparklines (no external deps).
 param(
     [string]$ResultDir = 'D:\mviewer_bench_data',
-    [string]$OutDir    = 'D:\mviewer\benchmark\report'
+    # Defaults to <repo>\benchmark\report, derived from this script's location.
+    [string]$OutDir    = (Join-Path (Split-Path -Parent $PSScriptRoot) 'benchmark\report')
 )
 
 $ErrorActionPreference = 'Continue'

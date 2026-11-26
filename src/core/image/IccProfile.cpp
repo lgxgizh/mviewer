@@ -218,11 +218,11 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     info.valid = true;
     const size_t profileSize = declared;
 
-    // ICC version: byte8 = major (binary); byte9 = minor in the BCD high nibble;
-    // byte10 = bugfix tens digit; byte11 = bugfix ones digit. The minor byte is
-    // BCD (e.g. 0x10 means minor 1), so only the high nibble is the minor number.
+    // ICC version: byte8 = major (binary); byte9 packs minor (high BCD nibble) and
+    // bugfix (low nibble). Bytes 10-11 are reserved and must be zero - reading them
+    // as a decimal bugfix field produced nonsense for any profile that sets them.
     const uint32_t minor = data[9] >> 4;
-    const uint32_t bugfix = uint32_t(data[10]) * 10 + uint32_t(data[11]);
+    const uint32_t bugfix = data[9] & 0x0Fu;
     info.version =
         std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(bugfix);
     info.deviceClass = deviceClassText(sig4(data + 12));

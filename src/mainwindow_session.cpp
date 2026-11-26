@@ -393,20 +393,25 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         const bool restoredPlaying = ws.currentPlaying;
         if (m_imageViewer)
         {
-            connect(
+            // Not Qt::SingleShotConnection: imageReady also fires for unrelated
+            // loads, and a single-shot would be consumed by the first one - the
+            // restored frame index / play state then never applied. Disconnect
+            // explicitly once the matching frame actually arrives.
+            auto conn = std::make_shared<QMetaObject::Connection>();
+            *conn = connect(
                 m_imageViewer, &ImageViewer::imageReady, this,
-                [this, restoredViewerPath, restoredFrame, restoredPlaying](const auto &frame)
+                [this, conn, restoredViewerPath, restoredFrame, restoredPlaying](const auto &frame)
                 {
                     if (!m_imageViewer || !frame ||
                         frame->metadata().filePath != restoredViewerPath)
                         return;
+                    disconnect(*conn);
                     m_imageViewer->setFrameIndex(restoredFrame);
                     if (restoredPlaying)
                         m_imageViewer->play();
                     else
                         m_imageViewer->pause();
-                },
-                Qt::SingleShotConnection);
+                });
         }
         m_selection->setCurrentImage(
             QString::fromUtf8(restoredPath.data(), static_cast<int>(restoredPath.size())));

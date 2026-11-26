@@ -14,16 +14,8 @@
 #include <QPainter>
 #include <QOpenGLContext>
 
-namespace
-{
-void fillPane(QImage &img)
-{
-    img.fill(Qt::transparent);
-}
-} // namespace
-
-QImage CompareWorkspace::compositeCanvasWithGl(const QRect &canvasRect, const QSize &physical,
-                                               qreal dpr)
+QImage CompareWorkspace::compositeCanvasWithGl(const QByteArray &cacheKey, const QRect &canvasRect,
+                                               const QSize &physical, qreal dpr)
 {
     if (!m_compositeGl)
         m_compositeGl = std::make_unique<mviewer::ui::CompareCompositeGL>();
@@ -68,14 +60,9 @@ QImage CompareWorkspace::compositeCanvasWithGl(const QRect &canvasRect, const QS
         p.end();
         return img;
     };
-    const QImage paneA = rasterPane(0);
-    const QImage paneB = rasterPane(1);
-
     mviewer::ui::CompareCompositeMode mode = mviewer::ui::CompareCompositeMode::Split;
     if (overlay)
         mode = mviewer::ui::CompareCompositeMode::Overlay;
-    else if (checker)
-        mode = mviewer::ui::CompareCompositeMode::Checkerboard;
 
     // Divider and checker sizes are logical in the CPU path; the texture is
     // physical, so scale them. Split's boundary is the pane geometry (the
@@ -85,9 +72,14 @@ QImage CompareWorkspace::compositeCanvasWithGl(const QRect &canvasRect, const QS
               : qRound(canvasRect.width() * m_splitPos * dpr);
     const int checkerEdge = std::max(4, m_checkerSize) * qRound(dpr);
 
-    QImage out = m_compositeGl->composite(mode, paneA, paneB, physical, dividerX,
-                                          std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0),
-                                          checkerEdge);
+    QImage out = m_compositeGl->compositeCached(
+        cacheKey,
+        [&](QImage &a, QImage &b)
+        {
+            a = rasterPane(0);
+            b = rasterPane(1);
+        },
+        mode, physical, dividerX, std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0), checkerEdge);
     if (!out.isNull())
         out.setDevicePixelRatio(dpr); // physical raster: paint it 1:1, not scaled
     return out;

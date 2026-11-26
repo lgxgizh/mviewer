@@ -209,8 +209,19 @@ size_t CacheManager::trimMipsToBudget(size_t maxBytes, const std::vector<std::st
     {
         if (total <= maxBytes)
             break;
+        // The snapshot above is stale by now if a concurrent store/invalidate
+        // raced in. Re-read under the lock so an already-dropped chain is not
+        // charged against the budget twice, and the drop is sized correctly.
+        size_t live = 0;
+        {
+            std::lock_guard<std::mutex> lock(m_mipMutex);
+            const auto it = m_mipChains.find(entry.key);
+            if (it == m_mipChains.end())
+                continue;
+            live = it->second.bytes;
+        }
         dropMips(entry.key);
-        const size_t drop = entry.bytes > total ? total : entry.bytes;
+        const size_t drop = live > total ? total : live;
         total -= drop;
         released += drop;
     }

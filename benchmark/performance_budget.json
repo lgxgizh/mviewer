@@ -69,10 +69,11 @@
     }
   },
   "provisional": {
-    "_comment": "Report-only metrics printed by mviewer_bench but not hard-gated (absent from scenario_map / budgets). Absolute limits are filled in after a Windows CI calibration run; do not invent numbers. B18/B19 are the end-to-end UI view-switch measurements that complement repository-level B7/B8.",
+    "_comment": "Report-only metrics printed by mviewer_bench but not hard-gated (absent from scenario_map / budgets). Absolute limits are filled in after a Windows CI calibration run; do not invent numbers. B18/B19 are the end-to-end UI view-switch measurements that complement repository-level B7/B8. B20 is the two-pane compare composite (ms per frame, report 149 ms on the dev box); it stays provisional for the same reason - no CI-calibrated, cross-machine-stable number exists yet.",
     "B16": "render_fps",
     "B17": "workflow_soak_rss_growth_mb",
     "B18": "e2e_switch_warm_p50_ms",
-    "B19": "e2e_switch_cold_p50_ms"
+    "B19": "e2e_switch_cold_p50_ms",
+    "B20": "compare_composite_frame_ms"
   }
 }

@@ -3,7 +3,9 @@
 # compiles g1_tiff_probe against mviewer_core, runs it with PATH restricted to
 # the staged Qt dir only. If it decodes a .tif, G1 (TIFF on clean Windows) is proven.
 $ErrorActionPreference = 'Stop'
-$repo = 'D:\mviewer'
+# Repository root is this script's grandparent; -Repo overrides it.
+param([string]$Repo = (Split-Path -Parent $PSScriptRoot))
+$repo = $Repo
 $qtBin = 'D:\QT\6.11.1\msvc2022_64\bin'
 $build = Join-Path $repo 'build_msvc'
 $stage = Join-Path $repo 'dist\g1_stage'

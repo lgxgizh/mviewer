@@ -38,6 +38,8 @@ void MainWindow::checkForUpdates(bool silent)
             checker.checkGitHub("lgxgizh/mviewer",
                                 [self](const mviewer::core::UpdateInfo &info)
                                 {
+                                    if (!qApp)
+                                        return; // teardown: pool drained, nothing to show
                                     QMetaObject::invokeMethod(qApp,
                                                               [self, info]()
                                                               {
