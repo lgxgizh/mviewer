@@ -142,6 +142,26 @@ int main()
     CHECK(grayOut.constView().data[4 * 3 - 1] == 255,
           "grayscale auto-stretch maps the maximum to 255");
 
+    // Flat channels: minV == maxV leaves the stretch range empty. The bounds must
+    // fall back to 0..255 rather than divide by zero (lround(NaN) is undefined).
+    ImageData flatGray = makeImageData(4, 3, PixelFormat::Grayscale8);
+    for (int i = 0; i < 4 * 3; ++i)
+        flatGray.mutableView().data[i] = 128;
+    const ImageData flatGrayOut = applyDisplayAdjust(flatGray, grayStretch);
+    bool flatGrayOk = !flatGrayOut.isNull();
+    for (int i = 0; flatGrayOk && i < 4 * 3; ++i)
+        flatGrayOk = flatGrayOut.constView().data[i] == 128;
+    CHECK(flatGrayOk, "a flat grayscale image survives auto-stretch unchanged");
+
+    ImageData white = makeImageData(4, 3, PixelFormat::RGB24);
+    for (size_t i = 0; i < white.buffer->size(); ++i)
+        white.mutableView().data[i] = 255;
+    const ImageData whiteOut = applyDisplayAdjust(white, grayStretch);
+    bool whiteOk = !whiteOut.isNull();
+    for (size_t i = 0; whiteOk && i < whiteOut.buffer->size(); ++i)
+        whiteOk = whiteOut.constView().data[i] == 255;
+    CHECK(whiteOk, "an all-white RGB image survives auto-stretch unchanged");
+
     fs::remove_all(root, ec);
     printf("\n==== display adjust test: %d passed, %d failed ====\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

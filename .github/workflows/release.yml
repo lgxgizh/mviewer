@@ -7,7 +7,8 @@
 #   * performance-report — full benchmark sweep + dashboard (Decode / Thumbnail
 #     / Cache Hit / Compare / GPU Upload / Memory Peak project-specific gates)
 #   * ui-regression       — full Golden Image UI regression (screenshots vs ref)
-#   * dr-memory           — DISABLED/skipped; not executed, no memory verdict
+#   * dr-memory           — removed from this pipeline; run on demand from
+#                           .github/workflows/drmemory.yml (no verdict on Qt 6.8)
 #   * warm-cache          — one MSVC Release compile into the sccache GHA cache;
 #                           the enabled Windows jobs below mostly hit the
 #                           cache instead of each compiling the app from scratch
@@ -193,63 +194,13 @@ jobs:
           path: golden/difference/
 
   # ---------------------------------------------------------------------------
-  # dr-memory — DISABLED (not executed; no memory verdict)
-  # Bounded old/new comparison did not establish a reliable completed verdict;
-  # see STATUS.md and the retained evidence. Skipped is not memory-clean.
+  # dr-memory: removed from this pipeline.
+  # The bounded old/new comparison never produced a reliable completed verdict
+  # (Qt 6.8 builds exceeded the runner's budget), so shipping a job that could
+  # not report anything only implied coverage. The tooling still exists and runs
+  # on demand from .github/workflows/drmemory.yml; Linux ASan/UBSan/TSan in
+  # ci.yml are the blocking memory gates.
   # ---------------------------------------------------------------------------
-  dr-memory:
-    if: ${{ false }}
-    name: Dr.Memory DISABLED (not executed; no memory verdict)
-    env:
-      MVIEWER_ALL_PDBS: 'ON'
-    runs-on: windows-2022
-    needs: [warm-cache]
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Cache LibRaw tag archive (review P2-11)
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: third_party/LibRaw-*.tar.gz
-          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
-
-      - name: Setup MSVC (with PDBs for Dr.Memory symbols)
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats
-          cache: true
-
-      - name: Build (Release, PDBs)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
-
-      - name: Dr.Memory contract tests
-        shell: pwsh
-        run: ./scripts/drmemory/test.ps1
-
-      # Job-level best-effort remains; the actual runner step MUST fail for
-      # errors/unavailable/no-report, with status.json and an explicit summary.
-      - name: Execute Dr.Memory and classify actual evidence
-        shell: pwsh
-        run: ./scripts/drmemory/run.ps1
-        timeout-minutes: 8
-
-      - name: Upload Dr.Memory evidence (including failures)
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: drmemory-evidence
-          path: drmemory_out/
-          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # package — portable zip + NSIS installer

@@ -1,5 +1,6 @@
 #include "application/PythonScriptRunner.h"
 
+#include "core/MainThreadDispatcher.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCoreApplication>
@@ -172,7 +173,12 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
     }
     if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
     {
-        const QString stderrText = QString::fromUtf8(process.readAllStandardError()).trimmed();
+        // Bounded: a script that writes forever must not become an unbounded
+        // allocation, same as the response body cap.
+        const QByteArray stderrBytes = process.readAllStandardError();
+        QString stderrText = QString::fromUtf8(stderrBytes.left(64 * 1024)).trimmed();
+        if (stderrBytes.size() > 64 * 1024)
+            stderrText += QStringLiteral("…(truncated)");
         error = stderrText.isEmpty()
                     ? QStringLiteral("the script exited with code %1").arg(process.exitCode())
                     : stderrText;
@@ -223,24 +229,20 @@ void PythonScriptRunner::runAsync(const QString &scriptPath, const QJsonObject &
         ::TaskScheduler::Priority::Background,
         [scriptPath, request, guard, delivered, timeoutMs](const ::TaskScheduler::TaskContext &)
         {
-            if (guard.isNull())
-                return; // the context is gone; nobody is listening
             QString error;
             const PythonScriptResult result =
                 PythonScriptRunner::instance().run(scriptPath, request, error, timeoutMs);
             const QString errorCopy = error;
-            // Back on the context's (UI) thread: the dialog must not be touched
-            // from the worker. Re-check inside the lambda too — the object can
-            // die between the check above and the queued delivery.
-            QMetaObject::invokeMethod(
-                guard.data(),
-                [guard, delivered, result, errorCopy]()
-                {
-                    if (guard.isNull())
-                        return;
-                    (*delivered)(result, errorCopy);
-                },
-                Qt::QueuedConnection);
+            // Post back without ever dereferencing the QPointer on this worker:
+            // Qt keeps object-thread data thread-locally, so reading guard.data()
+            // here races the dialog's destruction on the UI thread. Only the main
+            // thread touches it.
+            mvcore::postToMainThread([guard, delivered, result, errorCopy]()
+                                     {
+                                         if (guard.isNull())
+                                             return; // closed meanwhile; nobody is listening
+                                         (*delivered)(result, errorCopy);
+                                     });
         });
 }
 

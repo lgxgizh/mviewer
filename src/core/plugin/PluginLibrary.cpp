@@ -80,8 +80,22 @@ void *loadPluginLibraryVerified(const std::string &utf8Path, const std::string &
     QCryptographicHash hash(QCryptographicHash::Sha256);
     unsigned char buffer[64 * 1024];
     DWORD read = 0;
-    while (ReadFile(file, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+    for (;;)
+    {
+        const BOOL ok = ReadFile(file, buffer, sizeof(buffer), &read, nullptr);
+        if (!ok)
+        {
+            // Distinguish an I/O failure from a clean EOF: hashing a half-read
+            // file and reporting it as "changed on disk" sends the user after a
+            // ghost.
+            error = "plugin file could not be read: " + std::to_string(GetLastError());
+            CloseHandle(file);
+            return nullptr;
+        }
+        if (read == 0)
+            break; // EOF
         hash.addData(reinterpret_cast<const char *>(buffer), static_cast<qsizetype>(read));
+    }
 
     const std::string actual = hash.result().toHex().toStdString();
     bool matches = true;

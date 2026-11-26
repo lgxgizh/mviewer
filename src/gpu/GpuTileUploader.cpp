@@ -140,6 +140,11 @@ struct UnpackAlignmentRestorer
         // Tile uploads assume tightly packed rows. A non-zero row length left
         // behind by another owner would make the driver read past a tight buffer,
         // so zero it here and put everything back afterwards.
+        // Drain any error a previous owner left queued: glGetError() returns the
+        // oldest flag first, so without this a perfectly good upload would be
+        // blamed for somebody else's stale error and fall back to the CPU path.
+        while (gl->glGetError() != GL_NO_ERROR)
+            ;
         gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &previous);
         gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &previousRowLength);
         gl->glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &previousSkipPixels);

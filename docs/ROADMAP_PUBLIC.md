@@ -4,15 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.222**
+## Where we are now — **Beta / 1.0.223**
 
-MViewer remains in **Beta**; the current release is **`v1.0.222`**
+MViewer remains in **Beta**; the current release is **`v1.0.223`**
 (2026-11-26, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-Recent releases closed the review's deterministic P0s, stopped `ThumbnailPipeline`
-from submitting under its own mutex, fixed a directory-monitor latch that could
-wedge scans forever, closed the plugin hash-to-map race on Windows, cached the
-compare-canvas composite, and replaced the truncated Lanczos kernel with a real
-Lanczos-3. Offscreen CI is regression evidence, not proof of universal smoothness.
+Recent releases closed the review's deterministic P0s, fixed a divide-by-zero on
+flat channels in display auto-stretch, stopped a worker thread from dereferencing
+a `QPointer`, bound the update-check link to the requested repository, and made
+`workflow_ux_tests` deterministic - the suite is green end to end again.
+Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -67,7 +67,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.222** (current) | Real Lanczos-3 resampling, USM tap hoist | 🔵 Beta |
+| **1.0.223** (current) | Flat-channel divide-by-zero, script-thread QPointer | 🔵 Beta |
+| **1.0.222** | Real Lanczos-3 resampling, USM tap hoist | ✅ Previous patch |
 | **1.0.221** | Render cache, HiDPI tile units, preload cancellation | ✅ Previous patch |
 | **1.0.220** | Command-line open rejects device namespace | ✅ Previous patch |
 | **1.0.219** | Plugin hash->map race closed, Disable works | ✅ Previous patch |

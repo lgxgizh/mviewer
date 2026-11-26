@@ -40,9 +40,10 @@ class ImageLoadingService
     }
 
     // Restore the workspace snapshot for a directory (session restore).
-    mviewer::domain::Workspace loadWorkspace(const std::string &rootPath)
+    mviewer::domain::Workspace
+    loadWorkspace(const std::string &rootPath, const std::function<bool()> &cancelled = {})
     {
-        return mviewer::core::ImageLoadingFacade::instance().loadWorkspace(rootPath);
+        return mviewer::core::ImageLoadingFacade::instance().loadWorkspace(rootPath, cancelled);
     }
 
     // M46: `lifetime` is the consumer's AsyncLifetimeToken (see

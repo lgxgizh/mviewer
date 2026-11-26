@@ -81,6 +81,37 @@ void testGitHubUrlAndJson()
           "html_url is preferred and normal JSON escapes are decoded");
 }
 
+void testGitHubReleaseLinkIsBoundToTheRequestedRepository()
+{
+    // A tampered or proxied body must not be able to send the user to a different
+    // repository, even though the link is well-formed.
+    const std::string payloads[] = {
+        R"({ "html_url": "https://github.com/attacker/evil/releases/tag/v7.2.3", )"
+        R"("tag_name": "v7.2.3" })",
+        R"({ "html_url": "https://github.com/acme/viewer/releases/tag/v9.9.9", )"
+        R"("tag_name": "v7.2.3" })",
+        R"({ "html_url": "https://example.test/not-github", "tag_name": "v7.2.3" })",
+    };
+    for (const std::string &body : payloads)
+    {
+        CheckResult result;
+        mviewer::core::UpdateChecker checker(
+            "7.2.2",
+            [&body](const std::string &, std::string &)
+            {
+                return body;
+            });
+        checker.checkGitHub("acme/viewer",
+                            [&result](const mviewer::core::UpdateInfo &info)
+                            {
+                                ++result.callbackCount;
+                                result.info = info;
+                            });
+        check(result.info.releaseUrl == "https://github.com/acme/viewer/releases/tag/v7.2.3",
+              "release link is rebuilt from the requested repo and the parsed tag");
+    }
+}
+
 void testVersionOrdering()
 {
     const auto newer =
@@ -316,6 +347,7 @@ void testUpdatePrompt()
 int main()
 {
     testGitHubUrlAndJson();
+    testGitHubReleaseLinkIsBoundToTheRequestedRepository();
     testVersionOrdering();
     testInvalidResponses();
     testFetchError();

@@ -189,10 +189,12 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
     int deltaLut[511];
     buildDeltaLut(amount, threshold, deltaLut);
 
-    // The clamped source row for each tap depends only on y: compute it once per
-    // row instead of w*kSize times. (A general kernel cannot use a single running
-    // row accumulator - that identity holds only for uniform/box weights.)
-    std::vector<int> tapRows(static_cast<size_t>(kSize));
+    // Same row-accumulator shape as blurVerticalAndCombine(): for one output row,
+    // walk the kernel window and add whole contiguous rows into an int32
+    // accumulator, instead of touching a strided temp element for every (x, k).
+    // Integer sums are order-independent here, so the result is identical while
+    // the inner loop becomes a flat stream the compiler can vectorise.
+    std::vector<int> accRow(static_cast<size_t>(w));
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -200,19 +202,18 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
         const size_t rowOffset = static_cast<size_t>(y) * static_cast<size_t>(w);
         const uint8_t *srcRow = src + rowOffset * cpp;
         uint8_t *dstRow = dst + rowOffset * cpp;
+        std::fill(accRow.begin(), accRow.end(), 0);
         for (int k = 0; k < kSize; ++k)
-            tapRows[static_cast<size_t>(k)] = std::clamp(y - radius + k, 0, h - 1);
+        {
+            const int sy = std::clamp(y - radius + k, 0, h - 1);
+            const uint8_t *kRow = lumaTemp + static_cast<size_t>(sy) * static_cast<size_t>(w);
+            const int weight = kernel[static_cast<size_t>(k)];
+            for (int x = 0; x < w; ++x)
+                accRow[static_cast<size_t>(x)] += static_cast<int>(kRow[x]) * weight;
+        }
         for (int x = 0; x < w; ++x)
         {
-            int acc = 0;
-            for (int k = 0; k < kSize; ++k)
-            {
-                acc += lumaTemp[static_cast<size_t>(tapRows[static_cast<size_t>(k)]) *
-                                     static_cast<size_t>(w) +
-                                 static_cast<size_t>(x)] *
-                       kernel[static_cast<size_t>(k)];
-            }
-            const int blurLuma = (acc + 8192) >> 14;
+            const int blurLuma = (accRow[static_cast<size_t>(x)] + 8192) >> 14;
             const int origLuma = lumaSrc[rowOffset + static_cast<size_t>(x)];
             const int diffLuma = origLuma - blurLuma;
             const int delta = deltaLut[std::clamp(diffLuma, -255, 255) + 255];

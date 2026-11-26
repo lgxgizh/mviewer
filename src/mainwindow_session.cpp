@@ -143,7 +143,9 @@ void runPersistence(const PersistenceSnapshot &snapshot, const TaskScheduler::Ta
             return;
         }
         mviewer::domain::Workspace ws =
-            mviewer::application::ImageLoadingService::instance().loadWorkspace(snapshot.rootPath);
+            mviewer::application::ImageLoadingService::instance().loadWorkspace(
+                snapshot.rootPath,
+                [&] { return cancelled(ctx, cancel); });
         if (ws.empty())
         {
             result.error = "The current directory has no images to save.";

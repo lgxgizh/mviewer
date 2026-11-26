@@ -153,9 +153,11 @@ class ImageRepository
     // Build a domain Workspace model from a root directory: recursively scan
     // for image files, group them by parent directory into Folders, each with
     // an ImageSet of lightweight ImageMetadata (no pixel decode). Used by the
-    // UI to present the browsing model without loading any pixels.
+    // UI to present the browsing model without loading any pixels. `cancelled`
+    // is polled between directories so a huge tree can be abandoned mid-walk.
     mviewer::domain::Workspace loadWorkspace(const std::string &rootPath, int maxPerFolder = 2000,
-                                             bool recursive = true) const;
+                                             bool recursive = true,
+                                             const std::function<bool()> &cancelled = {}) const;
 
     // Save to disk cache explicitly.
     void cacheToDisk(const std::string &filePath);

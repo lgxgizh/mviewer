@@ -11,7 +11,9 @@ namespace
 using Complex = std::complex<double>;
 
 // Iterative radix-2 Cooley-Tukey, in place. `n` must be a power of two.
-void fftRadix2(std::vector<Complex> &data, bool inverse)
+// `scratch` lets a caller reuse one buffer across the many 1-D transforms that
+// make up a 2-D FFT instead of allocating per call.
+void fftRadix2(std::vector<Complex> &data, bool inverse, std::vector<Complex> *scratch)
 {
     const int n = static_cast<int>(data.size());
     if (n < 2)
@@ -26,7 +28,9 @@ void fftRadix2(std::vector<Complex> &data, bool inverse)
         if (i < j)
             std::swap(data[i], data[j]);
     }
-    std::vector<Complex> twiddle;
+    std::vector<Complex> owned;
+    std::vector<Complex> &twiddle = scratch != nullptr ? *scratch : owned;
+    twiddle.clear();
     for (int length = 2; length <= n; length <<= 1)
     {
         const double angle =
@@ -93,23 +97,25 @@ Fft2DResult computeFftMagnitude(const std::vector<float> &samples, int width, in
             plane[static_cast<size_t>(y) * paddedW + x] =
                 Complex(lumaSample(samples, width, x, y) - mean, 0.0);
 
-    // Rows.
+    // Rows. Rows at or beyond `height` are still all-zero padding (the plane was
+    // value-initialised), so their transform is identically zero - skip them.
     std::vector<Complex> row(static_cast<size_t>(paddedW));
-    for (int y = 0; y < paddedH; ++y)
+    std::vector<Complex> twiddle;
+    for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < paddedW; ++x)
             row[static_cast<size_t>(x)] = plane[static_cast<size_t>(y) * paddedW + x];
-        fftRadix2(row, false);
+        fftRadix2(row, false, &twiddle);
         for (int x = 0; x < paddedW; ++x)
             plane[static_cast<size_t>(y) * paddedW + x] = row[static_cast<size_t>(x)];
     }
-    // Columns.
+    // Columns. Same argument: columns at or beyond `width` are entirely padding.
     std::vector<Complex> column(static_cast<size_t>(paddedH));
-    for (int x = 0; x < paddedW; ++x)
+    for (int x = 0; x < width; ++x)
     {
         for (int y = 0; y < paddedH; ++y)
             column[static_cast<size_t>(y)] = plane[static_cast<size_t>(y) * paddedW + x];
-        fftRadix2(column, false);
+        fftRadix2(column, false, &twiddle);
         for (int y = 0; y < paddedH; ++y)
             plane[static_cast<size_t>(y) * paddedW + x] = column[static_cast<size_t>(y)];
     }

@@ -1,12 +1,12 @@
 # Standalone tooling validation: never tags, packages or publishes releases.
 name: Dr.Memory tooling validation
 on:
+  # Manual only: the bounded old/new comparison (see STATUS.md) could not produce
+  # a reliable completed verdict - Qt 6.8 builds exceeded 180 s and the report
+  # was inconclusive. Running it on every PR therefore told nobody anything while
+  # looking like a live memory gate. Run it by hand when touching memory-heavy
+  # code; Linux ASan/UBSan/TSan are the blocking memory gates in ci.yml.
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'scripts/drmemory/**'
-      - '.github/workflows/drmemory.yml'
-      - '.github/workflows/release.yml'
 permissions:
   contents: read
 concurrency:
@@ -16,16 +16,14 @@ jobs:
   contracts:
     name: Dr.Memory deterministic contracts
     runs-on: windows-2022
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - shell: pwsh
         run: ./scripts/drmemory/test.ps1
   actual-execution:
-    # Disabled after the bounded old/new comparison failed to establish a
-    # reliable completed verdict; see STATUS.md. Skipped is not memory-clean.
-    if: ${{ false }}
-    name: Dr.Memory DISABLED (not executed; no memory verdict)
+    name: Dr.Memory execution (manual, best effort)
     needs: contracts
     runs-on: windows-2022
     timeout-minutes: 25
@@ -56,6 +54,9 @@ jobs:
       - name: Actual Dr.Memory execution and report verification
         shell: pwsh
         timeout-minutes: 8
+        # Best effort by design: the evidence upload below still publishes whatever
+        # the run produced, and a tooling timeout is not a product failure.
+        continue-on-error: true
         run: ./scripts/drmemory/run.ps1 -EvidenceRoot "drmemory_out/Windows path with spaces"
       - name: Retain real output and reports even when unavailable
         if: always()

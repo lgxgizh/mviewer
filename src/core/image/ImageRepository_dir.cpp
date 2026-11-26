@@ -387,7 +387,8 @@ void ImageRepository::invalidate(const std::string &filePath)
 }
 
 mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &rootPath,
-                                                          int maxPerFolder, bool recursive) const
+                                                          int maxPerFolder, bool recursive,
+                                                           const std::function<bool()> &cancelled) const
 {
     mviewer::domain::Workspace ws;
     ws.rootPath = rootPath;
@@ -415,6 +416,8 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
              end;
              !ec && it != end; it.increment(ec))
         {
+            if (cancelled && cancelled())
+                return ws; // abandoned: hand back what has been collected
             std::error_code entryEc;
             if (it->is_directory(entryEc) && !entryEc)
                 visitDir(it->path());
@@ -430,6 +433,8 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
 
     for (const auto &[dir, files] : byDir)
     {
+        if (cancelled && cancelled())
+            return ws;
         mviewer::domain::Folder folder;
         folder.path = dir;
         folder.name = mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(dir).filename());

@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.222** · Release tag: **v1.0.222**
+> Snapshot: 2026-11-26 · Version: **1.0.223** · Release tag: **v1.0.223**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,23 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.223 - DisplayAdjust divide-by-zero, script-thread QPointer, release-link binding (2026-11-26)
+
+- `applyDisplayAdjust()` could compute a zero stretch range on a flat channel and
+  then call `std::lround(NaN)` (undefined behaviour). Flat channels now keep the
+  full 0..255 range.
+- `PythonScriptRunner::runAsync()` no longer dereferences a QPointer on a worker
+  thread; delivery goes through `mvcore::postToMainThread()`.
+- Tile uploads drain stale OpenGL errors before judging their own result.
+- The update-check release link must name the requested owner/repo and tag.
+- `loadWorkspace()` accepts a cancellation probe; `UsmSharpen` uses the row
+  accumulator; `PluginLibrary` separates read failure from EOF; `Fft2D` skips
+  all-zero padded rows/columns and reuses its twiddle buffer.
+- **`workflow_ux_tests` is green again and no longer timing-dependent**: it waits
+  for Browse's status instead of assuming one fixed pump suffices.
+- Dr.Memory is no longer dead config: manual-only in `drmemory.yml`, removed from
+  `release.yml`.
 
 ## 1.0.222 - Lanczos-3 resampling, USM tap hoist (2026-11-26)
 

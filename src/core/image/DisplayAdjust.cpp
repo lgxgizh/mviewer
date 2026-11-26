@@ -307,9 +307,12 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
         }
         for (int c = 0; c < 3; ++c)
         {
-            lo[c] = minV[c];
-            // A flat channel has no range to stretch: leave it untouched.
-            hi[c] = (maxV[c] > minV[c]) ? maxV[c] : 255;
+            // A flat channel has no range to stretch: leave it untouched. The
+            // bounds must still span 0..255 - collapsing both to 255 would divide
+            // by zero below (lround(NaN) is undefined behaviour).
+            const bool flat = !(maxV[c] > minV[c]);
+            lo[c] = flat ? 0.0 : static_cast<double>(minV[c]);
+            hi[c] = flat ? 255.0 : static_cast<double>(maxV[c]);
         }
     }
 
@@ -329,7 +332,7 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
         for (int i = 0; i < 256; ++i)
         {
             double v = static_cast<double>(i) / 255.0;
-            if (adjust.autoStretch)
+            if (adjust.autoStretch && hi[c] > lo[c])
                 v = (static_cast<double>(i) - lo[c]) / (hi[c] - lo[c]);
             v *= exposure;
             v = std::pow(v < 0.0 ? 0.0 : v, invGamma);

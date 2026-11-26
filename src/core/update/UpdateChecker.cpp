@@ -296,7 +296,7 @@ bool isGitHubComponent(const std::string &component)
                        { return std::isalnum(c) || c == '-' || c == '_' || c == '.'; });
 }
 
-std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string &tag)
+std::string githubRepoFromApiUrl(const std::string &apiUrl)
 {
     constexpr std::string_view prefix = "https://api.github.com/repos/";
     constexpr std::string_view suffix = "/releases/latest";
@@ -305,7 +305,6 @@ std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string 
     {
         return {};
     }
-
     const std::string repo =
         apiUrl.substr(prefix.size(), apiUrl.size() - prefix.size() - suffix.size());
     const size_t slash = repo.find('/');
@@ -314,6 +313,14 @@ std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string 
     {
         return {};
     }
+    return repo;
+}
+
+std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string &tag)
+{
+    const std::string repo = githubRepoFromApiUrl(apiUrl);
+    if (repo.empty())
+        return {};
     return "https://github.com/" + repo + "/releases/tag/" + tag;
 }
 
@@ -333,19 +340,11 @@ std::string validatedReleaseUrl(const std::string &candidate)
     return isValidHttpsUrl(candidate) ? candidate : std::string{};
 }
 
-// The canonical GitHub API endpoint is the one case where the release link is
-// remote content that is handed straight to the browser: the response body is
-// attacker-controllable if the API is proxied or the transport is tampered with,
-// so require the link to stay on github.com and point at a release tag.
-bool isCanonicalGitHubApiUrl(const std::string &url)
-{
-    constexpr std::string_view prefix = "https://api.github.com/repos/";
-    constexpr std::string_view suffix = "/releases/latest";
-    return url.starts_with(prefix) && url.ends_with(suffix) &&
-           url.size() > prefix.size() + suffix.size();
-}
-
-bool isGitHubReleaseUrl(const std::string &candidate)
+// Shape check with the two identities that matter: the link must name THIS
+// repository and THIS tag. Validating only "github.com/.../releases/tag/..." would
+// let a tampered or proxied response body redirect the user elsewhere.
+bool isGitHubReleaseUrlFor(const std::string &candidate, const std::string &ownerRepo,
+                           const std::string &tagName)
 {
     if (!isValidHttpsUrl(candidate))
         return false;
@@ -353,16 +352,15 @@ bool isGitHubReleaseUrl(const std::string &candidate)
     if (url.host().compare(QStringLiteral("github.com"), Qt::CaseInsensitive) != 0)
         return false;
     const QStringList segments = url.path().split(QLatin1Char('/'), Qt::SkipEmptyParts);
-    if (segments.size() != 5 || segments.at(2) != QLatin1String("releases") ||
-        segments.at(3) != QLatin1String("tag") || segments.at(4).isEmpty())
+    if (segments.size() < 5 || segments.at(2) != QLatin1String("releases") ||
+        segments.at(3) != QLatin1String("tag"))
+        return false;
+    if (segments.at(4).toStdString() != tagName)
+        return false;
+    if ((segments.at(0) + QLatin1Char('/') + segments.at(1)).toStdString() != ownerRepo)
         return false;
     return isGitHubComponent(segments.at(0).toStdString()) &&
            isGitHubComponent(segments.at(1).toStdString());
-}
-
-std::string validatedGitHubReleaseUrl(const std::string &candidate)
-{
-    return isGitHubReleaseUrl(candidate) ? candidate : std::string{};
 }
 
 } // namespace
@@ -451,12 +449,18 @@ void UpdateChecker::checkUrl(const std::string &updateJsonUrl, UpdateCallback cb
         return;
     }
     info.hasUpdate = *versionOrder > 0;
-    // A custom endpoint is operator-configured, so its html_url is honoured as
-    // long as it is HTTPS. The canonical GitHub API response is untrusted
-    // remote content: only a github.com release-tag link is accepted there.
-    info.releaseUrl = isCanonicalGitHubApiUrl(updateJsonUrl)
-                          ? validatedGitHubReleaseUrl(payload->htmlUrl)
-                          : validatedReleaseUrl(payload->htmlUrl);
+    // Canonical GitHub endpoint: the link must name THIS repository and THIS tag,
+    // otherwise it is rebuilt from data we chose ourselves. A tampered or proxied
+    // response body cannot redirect the user to another owner/repo. An
+    // operator-configured endpoint keeps its https html_url.
+    const std::string repo = githubRepoFromApiUrl(updateJsonUrl);
+    if (!repo.empty())
+        info.releaseUrl =
+            isGitHubReleaseUrlFor(payload->htmlUrl, repo, payload->tagName)
+                ? validatedReleaseUrl(payload->htmlUrl) // keeps any query string
+                : std::string{};
+    else
+        info.releaseUrl = validatedReleaseUrl(payload->htmlUrl);
     if (info.releaseUrl.empty())
         info.releaseUrl = deriveGitHubReleaseUrl(updateJsonUrl, payload->tagName);
 

@@ -38,9 +38,11 @@ class ImageLoadingFacade
         return ImageRepository::instance().load(path, options);
     }
 
-    mviewer::domain::Workspace loadWorkspace(const std::string &rootPath)
+    mviewer::domain::Workspace
+    loadWorkspace(const std::string &rootPath,
+                  const std::function<bool()> &cancelled = {})
     {
-        return ImageRepository::instance().loadWorkspace(rootPath);
+        return ImageRepository::instance().loadWorkspace(rootPath, 2000, true, cancelled);
     }
 
     // M46: `lifetime` is the consumer's AsyncLifetimeToken. The request layer

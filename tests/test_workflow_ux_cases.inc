@@ -3368,6 +3368,16 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     CHECK(compareAction != nullptr, "fullscreen workflow: Compare action is discoverable");
     if (!compareAction)
         return;
+    // Browse publishes its status from the asynchronous gallery scan. Waiting for
+    // it here (instead of assuming one fixed pump is enough) keeps this assertion
+    // about ordering - "Browse got a message before Compare took over" - rather
+    // than about how fast the machine happened to be.
+    QString browseStatus;
+    for (int i = 0; i < 200 && browseStatus.isEmpty(); ++i)
+    {
+        pump(20);
+        browseStatus = w.statusBar()->currentMessage();
+    }
     compareAction->trigger();
     pump(300);
     // QPointer: Escape closes the dialog and it is deleted (deleteLater), so
@@ -3390,7 +3400,6 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     }
     if (compareDialog)
     {
-        const QString browseStatus = w.statusBar()->currentMessage();
         CompareWorkspace *compare = compareDialog->findChild<CompareWorkspace *>();
         QCheckBox *pixelLink = compare ? findChk(compare, QStringLiteral("Pixel Link")) : nullptr;
         RawImageView *linkPane = nullptr;

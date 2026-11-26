@@ -2,6 +2,59 @@
 
 ## [Unreleased]
 
+## [1.0.223] - 2026-11-26
+
+### Fixed — correctness / concurrency
+
+- **`DisplayAdjust` could divide by zero and call `lround(NaN)`.** With
+  auto-stretch, a flat channel (all-white RGB, or any greyscale image whose single
+  channel is constant) produced `lo == hi == 255`, so the LUT build evaluated
+  `(v - lo) / (hi - lo)` on a zero denominator. The result was `NaN` fed to
+  `std::lround` — undefined behaviour that UBSan flags and that produced wrong
+  pixels on white images. Flat channels now fall back to the full 0..255 range,
+  i.e. no stretch, which is what the comment always claimed.
+- **`PythonScriptRunner::runAsync()` dereferenced a `QPointer` on a worker
+  thread.** Qt keeps object-thread data thread-locally, so reading `guard.data()`
+  there races the dialog's destruction on the UI thread. Delivery now goes through
+  `mvcore::postToMainThread()` and only the main thread touches the guard.
+
+### Hardened
+
+- **Tile uploads drain stale OpenGL errors first.** `glGetError()` after
+  `glTexImage2D` reports the *oldest* queued flag, so an error left behind by any
+  earlier GL call used to make a perfectly good upload fail and fall back to the
+  CPU path.
+- **The update-check release link is bound to the repository we asked about.**
+  `html_url` is accepted only when it names the requested owner/repo *and* the
+  parsed tag name; otherwise the link is rebuilt from the request URL and the tag.
+  Previously a well-formed but different repository in a tampered or proxied
+  response body passed validation. Query strings on a legitimate link survive.
+- **`loadWorkspace()` accepts a cancellation probe** and is polled between
+  directories, so abandoning a huge recursive scan no longer waits for the whole
+  tree.
+- **`UsmSharpen`'s luma path uses the same row accumulator as the RGB path** — one
+  contiguous pass per kernel tap instead of a strided element per (x, k).
+- **`PluginLibrary` distinguishes an I/O read failure from EOF** instead of hashing
+  a half-read file and blaming "changed on disk".
+- **`Fft2D` skips all-zero padded rows and columns** (their transform is
+  identically zero) and reuses one twiddle buffer across the 1-D transforms.
+- Python script stderr is truncated at 64 KiB like the response body;
+  `CompareCompositeGL::destroy()` clears its cached composite; the RGB888 stride
+  check compares against Qt's exact alignment formula.
+
+### Tests / CI
+
+- `workflow_ux_tests` no longer depends on machine speed: it waits (bounded) for
+  Browse to publish its status before opening Compare, instead of assuming one
+  fixed pump is enough. The assertion still checks that Browse had a message
+  *before* Compare took over.
+- New `test_display_adjust` cases pin that flat greyscale and all-white RGB images
+  survive auto-stretch unchanged; `updatechecker_tests` covers a foreign repo, a
+  mismatched tag and a non-GitHub link.
+- **Dr.Memory is no longer dead config.** `drmemory.yml` runs on manual dispatch
+  only (with the execution step best-effort so evidence is still published), and
+  the job that could never report a verdict was removed from `release.yml`.
+
 ## [1.0.222] - 2026-11-26
 
 ### Algorithms

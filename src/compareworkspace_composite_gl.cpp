@@ -305,6 +305,8 @@ void CompareCompositeGL::destroy()
         abandonGpuObjects();
 
     m_fboSize = QSize();
+    m_cachedKey.clear();
+    m_cachedImage = QImage();
     m_ready = false;
     m_destroying = false;
 }
@@ -319,7 +321,10 @@ bool uploadCompareRgb888(QOpenGLFunctions *gl, unsigned int tex, const QImage &i
     QImage rgb = image.convertToFormat(QImage::Format_RGB888);
     if (rgb.isNull())
         return false;
-    if (rgb.bytesPerLine() % 4 != 0)
+    // Qt pads RGB888 rows to a 4-byte boundary: compare against that exact
+    // formula rather than "divisible by 4", which a foreign stride could satisfy.
+    const int expectedStride = (rgb.width() * 3 + 3) & ~3;
+    if (rgb.bytesPerLine() != expectedStride)
         rgb = rgb.copy();
     GLint previousAlignment = 4;
     GLint previousRowLength = 0;
