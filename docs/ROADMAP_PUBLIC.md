@@ -4,16 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.234**
+## Where we are now — **Beta / 1.0.235**
 
-MViewer remains in **Beta**; the current release is **`v1.0.234`**
+MViewer remains in **Beta**; the current release is **`v1.0.235`**
 (2026-11-27, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-Recent releases added a shared exposure/gamma/LUT adjust for both compare panes,
+Recent releases fixed a Browse-mode bug where `Ctrl+R` left the rotated image's
+thumbnail blank, added a shared exposure/gamma/LUT adjust for both compare panes,
 three ready-to-use Python analysis scripts, subsystem extractions
-(`DisplayAdjustController`, `CompareAdjustedExportJob`, `ThumbnailTrash`), a series
-of responsibility-TU splits (batch export, dimension probe, pixel-link, histogram,
-drag & drop), and moved the viewer's and compare workspace's presentation state into
-passive `Private` bundles so both headers sit well below the 800-line ceiling.
+(`DisplayAdjustController`, `CompareAdjustedExportJob`, `ThumbnailTrash`),
+responsibility-TU splits, moved the viewer's and compare workspace's presentation
+state into passive `Private` bundles, plus a divide-by-zero fix on flat channels.
 Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -69,7 +69,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.234** (current) | compareworkspace.h off the ceiling via Private | 🔵 Beta |
+| **1.0.235** (current) | Browse rotate thumbnail fix | 🔵 Beta |
+| **1.0.234** | compareworkspace.h off the ceiling via Private | ✅ Previous patch |
 | **1.0.233** | imageviewer.h off the ceiling via Private | ✅ Previous patch |
 | **1.0.231** | Histogram TU | ✅ Previous patch |
 | **1.0.230** | Pixel-link TU | ✅ Previous patch |

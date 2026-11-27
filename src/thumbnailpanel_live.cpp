@@ -118,6 +118,12 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     m_incrementalPreviousCurrentRow = previousCurrentRow;
     applyFilter();
     updateTypeHiddenHint();
+    // A modified entry had its thumbnail caches dropped by `invalidate()` above,
+    // so the affected cells are now empty. Re-declare the visible range: that is
+    // what enqueues a fresh decode for those rows. Without it the cell stayed
+    // blank until an unrelated scroll/resize/filter nudge (rotate used to leave
+    // a white thumbnail behind for exactly this reason).
+    updateVisibleRange();
 
     if (!renamedFrom.isEmpty())
         emit pathsRenamed(renamedFrom, renamedTo);
@@ -223,15 +229,19 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
                                                 QList<Entry> &next, QStringList &removedPaths,
                                                 QStringList &renamedFrom, QStringList &renamedTo)
 {
-    QStringList diskInvalidations;
-    auto invalidate = [this, &diskInvalidations](const QString &path)
+    // Invalidate the shared source/pipeline state inline. Deferring it (the old
+    // behaviour) raced with the visible-range enqueue that follows the delta:
+    // the deferred pass bumps the pipeline's path revision again, so the decode
+    // that was just enqueued for the changed cell is discarded as stale and the
+    // cell stays blank until something else nudges the viewport.
+    auto invalidate = [this](const QString &path)
     {
         if (path.isEmpty())
             return;
         const std::string utf8 = path.toUtf8().toStdString();
         ThumbnailPipeline::instance().invalidatePath(utf8);
+        ThumbnailProvider::invalidateSource(utf8);
         invalidateThumbnailCacheFor(path);
-        diskInvalidations.append(path);
     };
 
     applyDeltaRemovalsAndModifications(delta, next, removedPaths, renamedFrom, renamedTo,
@@ -249,18 +259,6 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
         m_metaLens.insert(newKey, m_metaLens.take(oldKey));
         if (pathEqual(m_pendingSelect, oldPath))
             m_pendingSelect = newPath;
-    }
-
-    if (!diskInvalidations.isEmpty())
-    {
-        const QStringList paths = diskInvalidations;
-        TaskScheduler::instance().submit(TaskScheduler::MetadataPool,
-                                         [paths]()
-                                         {
-                                             for (const QString &path : paths)
-                                                 ThumbnailProvider::invalidateSource(
-                                                     path.toUtf8().toStdString());
-                                         });
     }
 }
 

@@ -918,6 +918,23 @@ target_include_directories(compare_adjusted_export_tests PRIVATE ${CMAKE_CURRENT
 add_test(NAME compare_adjusted_export_tests COMMAND compare_adjusted_export_tests)
 set_tests_properties(compare_adjusted_export_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# Browse-mode rotate: the cell thumbnail must come back, not stay blank.
+add_executable(browse_rotate_thumbnail_tests
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_rotate_thumbnail.cpp
+)
+target_link_libraries(browse_rotate_thumbnail_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(browse_rotate_thumbnail_tests PRIVATE cxx_std_20)
+target_include_directories(browse_rotate_thumbnail_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME browse_rotate_thumbnail_tests COMMAND browse_rotate_thumbnail_tests)
+set_tests_properties(browse_rotate_thumbnail_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # Unlinked canvas ROI stays on the pane it was drawn on; grid Space ignores
 # wheel and pan; canvas pixel grid follows the held image; ROI histogram and
 # copy use each pane's selection when sizes differ.

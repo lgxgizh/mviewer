@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.234** · Release tag: **v1.0.234**
+> Snapshot: 2026-11-27 · Version: **1.0.235** · Release tag: **v1.0.235**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,18 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.235 - Browse rotate no longer blanks the gallery thumbnail (2026-11-27)
+
+- `Ctrl+R` in Browse mode left the rotated image's cell blank/white and it did not
+  recover. Root cause was two compounding defects on the live-folder path:
+  `applyDirectoryDelta` dropped the cached thumbnail without re-declaring the
+  visible range (so nothing re-requested it), and the deferred source invalidation
+  bumped the pipeline's path revision after an enqueue, so the fresh decode was
+  discarded as stale.
+- Invalidation now runs inline and the visible range is re-declared after the delta.
+- `browse_rotate_thumbnail_tests` covers both the explicit host refresh and a real
+  `DirectorySnapshot` diff.
 
 ## 1.0.234 - compareworkspace.h off the ceiling via Private (2026-11-27)
 

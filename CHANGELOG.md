@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.235] - 2026-11-27
+
+### Fixed
+
+- **Browse mode: `Ctrl+R` left that image's gallery thumbnail blank (white) and it
+  did not come back.** Two defects compounded on the live-folder path:
+  1. `ThumbnailPanel::applyDirectoryDelta` dropped the cached thumbnail for a
+     modified file but never re-declared the visible range, so no new decode was
+     ever enqueued for that row.
+  2. The source invalidation for changed paths was deferred to a background task,
+     which bumped the thumbnail pipeline's path revision *after* an enqueue. The
+     decode then failed its staleness check and was discarded - permanently, until
+     something else nudged the viewport.
+  Both are fixed: invalidation now runs inline (every revision bump happens before
+  the enqueue) and the visible range is re-declared once the delta is applied.
+- New `browse_rotate_thumbnail_tests` drives a real rewrite plus a real
+  `DirectorySnapshot` diff through both refresh paths and asserts the cell
+  recovers with the *current* pixels rather than staying blank or going stale.
+
 ## [1.0.234] - 2026-11-27
 
 ### Refactor — `compareworkspace.h` off the 800-line ceiling (no controller interfaces)
