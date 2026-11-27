@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [1.0.237] - 2026-11-27
+
+### Fixed — why `Ctrl+R` still blanked the thumbnail on a real setup
+
+The v1.0.235 fix covered a single panel; three more defects kept the white
+placeholder alive whenever more than one pane existed or Details/List was active.
+
+- **A second pane cancelled the first pane's decode.** `refreshTransformedPaths`,
+  `onGalleryPathsModified` and the YUV reload invalidated the shared
+  `ThumbnailProvider` once *per pane*, so the second call bumped the pipeline's
+  path revision again and the first pane's freshly enqueued decode was discarded
+  as stale - while the hidden/empty pane never re-enqueued anything. Shared state
+  is now invalidated exactly once per batch, then each pane drops only its own
+  cache (`ThumbnailPanel::dropLocalThumbnailCache`).
+- **A hidden pane no longer touches the shared pipeline at all** when it receives
+  a delta for a directory it shares with a visible pane.
+- **A mismatched global pipeline thumb size silently dropped the callback.**
+  `ThumbnailPipeline` is a singleton with one size; another pane or an earlier view
+  mode can leave it different from this panel's. The result callback no longer
+  throws the decode away - it stores it at its own size, and `thumbReady()`'s
+  by-path fallback already picks it up (Details/List scale to their cell anyway).
+- **Path normalisation hole**: `invalidateThumbnailCacheFor` matched cache keys
+  with the raw path, but keys are built from `galleryPathKey(path)`, so a native
+  Windows path never matched and the stale pixmap survived.
+- `browse_rotate_thumbnail_tests` now drives four scenarios: explicit refresh,
+  live directory delta, a Details pane plus a hidden pane sharing the directory
+  (MainWindow's exact order), and a deliberately mismatched pipeline thumb size.
+
 ## [1.0.236] - 2026-11-27
 
 ### Fixed — review follow-up on the v1.0.223–v1.0.235 batch

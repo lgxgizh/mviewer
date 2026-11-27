@@ -52,11 +52,13 @@ void invalidateThumbnails(const QString &path, ThumbnailPanel *primary, Thumbnai
 {
     const std::string utf8 = path.toUtf8().toStdString();
     mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    // Once, here: each panel's own invalidateSourceImage would repeat this and
+    // cancel the decode a previous pane just enqueued for the same path.
     ThumbnailProvider::invalidateSource(utf8);
     for (ThumbnailPanel *panel : {primary, secondary, tertiary})
     {
         if (panel)
-            panel->invalidateSourceImage(path);
+            panel->dropLocalThumbnailCache(path);
     }
 }
 

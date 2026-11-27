@@ -150,7 +150,14 @@ void ThumbnailPanel::wireThumbnailPipeline()
                             return;
                         ThumbnailPanel *panel = self.data();
                         const QString qp = QString::fromStdString(p);
-                        if (size != panel->m_thumbSize)
+                        // The pipeline is a single shared instance, so `size` may
+                        // differ from this panel's m_thumbSize (another pane, or an
+                        // earlier view mode, set the global). Details/List scale any
+                        // thumbnail to their cell and thumbReady() falls back through
+                        // the by-path index, so accept the result at its own size
+                        // instead of dropping it - dropping it left the cell blank
+                        // until something else nudged the viewport.
+                        if (size <= 0)
                             return;
                         // Two panes can share the pipeline (including the same
                         // directory). Ignore results that are not in this panel.

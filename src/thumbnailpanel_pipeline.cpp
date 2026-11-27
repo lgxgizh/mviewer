@@ -23,7 +23,10 @@ void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
 {
     if (path.isEmpty())
         return;
-    const QString prefix = path + QChar(0x1f);
+    // Keys are built from galleryPathKey(path), so the erase prefix must use it
+    // too - a native Windows path would otherwise never match and the stale
+    // pixmap would survive the invalidation.
+    const QString prefix = galleryPathKey(path) + QChar(0x1f);
     QMutexLocker lk(&m_thumbMtx);
     for (auto it = m_thumbReady.begin(); it != m_thumbReady.end();)
     {
@@ -48,20 +51,22 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     if (path.isEmpty())
         return;
     ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
+    dropLocalThumbnailCache(path);
+}
+
+void ThumbnailPanel::dropLocalThumbnailCache(const QString &path)
+{
+    if (path.isEmpty())
+        return;
     invalidateThumbnailCacheFor(path);
-    // Force a re-request for visible cells that reference this path.
-    const int row = m_rowByPath.value(galleryPathKey(path), -1);
-    if (row >= 0)
+    // Force a re-request for visible cells that reference this path. A hidden or
+    // empty pane has nothing to re-queue, and enqueuing for it would only add
+    // background work.
+    if (!isHidden() && !m_paths.isEmpty())
     {
-        const QModelIndex idx = model()->index(row, 0);
-        if (idx.isValid())
-            update(visualRect(idx));
-    }
-    else
-    {
+        updateVisibleRange();
         viewport()->update();
     }
-    updateVisibleRange();
 }
 
 // Caller holds m_thumbMtx. cacheKey is galleryPathKey + 0x1f + size; the

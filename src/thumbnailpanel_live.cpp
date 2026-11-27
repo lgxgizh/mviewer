@@ -234,13 +234,21 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
     // the deferred pass bumps the pipeline's path revision again, so the decode
     // that was just enqueued for the changed cell is discarded as stale and the
     // cell stays blank until something else nudges the viewport.
-    auto invalidate = [this](const QString &path)
+    //
+    // A pane that shares its directory but is not showing must only drop its own
+    // cache: the global invalidation would cancel the visible pane's freshly
+    // enqueued decode for the same path.
+    const bool touchesSharedPipeline = !isHidden() && !m_paths.isEmpty();
+    auto invalidate = [this, touchesSharedPipeline](const QString &path)
     {
         if (path.isEmpty())
             return;
         const std::string utf8 = path.toUtf8().toStdString();
-        ThumbnailPipeline::instance().invalidatePath(utf8);
-        ThumbnailProvider::invalidateSource(utf8);
+        if (touchesSharedPipeline)
+        {
+            ThumbnailPipeline::instance().invalidatePath(utf8);
+            ThumbnailProvider::invalidateSource(utf8);
+        }
         invalidateThumbnailCacheFor(path);
     };
 

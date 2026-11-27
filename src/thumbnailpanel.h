@@ -376,6 +376,13 @@ class ThumbnailPanel : public QListView
     // Drop decoded thumbnails for one source path after an in-place file edit
     // (rotate/flip) and schedule a visible-range reload so the gallery updates.
     void invalidateSourceImage(const QString &path);
+    // Local-only variant: drop this panel's cached thumbnail/pending/failed state
+    // WITHOUT touching the shared ThumbnailProvider/pipeline. Use it when several
+    // panes are refreshed together - invalidate the shared source once yourself
+    // (ThumbnailProvider::invalidateSource), because a second global invalidation
+    // cancels the decode another pane just enqueued for the same path, leaving its
+    // cell blank forever. Re-declares the visible range when this panel is shown.
+    void dropLocalThumbnailCache(const QString &path);
     // Re-probe the stored dimensions of just these paths. A 90/270 rotate
     // rewrites the file, so the scan-cached width/height no longer match the
     // rotated thumbnail in the card footer / Details column.

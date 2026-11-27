@@ -13,6 +13,7 @@
 #include "previewpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
+#include "thumbnailprovider.h"
 
 #include "analyzermodel.h"
 
@@ -430,12 +431,15 @@ void MainWindow::onGalleryPathsModified(const QStringList &paths)
     {
         if (m_imageViewer)
             m_imageViewer->refreshSource(path);
+        // One shared invalidation, then per-pane local drops: a second global pass
+        // would cancel the decode an earlier pane just enqueued for this path.
+        ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
         if (m_thumbnailPanel)
-            m_thumbnailPanel->invalidateSourceImage(path);
+            m_thumbnailPanel->dropLocalThumbnailCache(path);
         if (m_secondaryThumbnailPanel)
-            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+            m_secondaryThumbnailPanel->dropLocalThumbnailCache(path);
         if (m_tertiaryThumbnailPanel)
-            m_tertiaryThumbnailPanel->invalidateSourceImage(path);
+            m_tertiaryThumbnailPanel->dropLocalThumbnailCache(path);
         if (path == currentImagePath())
         {
             if (m_previewPanel)

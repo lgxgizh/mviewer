@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.236** · Release tag: **v1.0.236**
+> Snapshot: 2026-11-27 · Version: **1.0.237** · Release tag: **v1.0.237**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,20 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.237 - multi-pane thumbnail refresh, pipeline size mismatch (2026-11-27)
+
+- Shared `ThumbnailProvider` invalidation is now once per batch; each pane drops
+  only its own cache (`dropLocalThumbnailCache`). Previously the second pane's
+  invalidate cancelled the first pane's enqueued decode and the cell stayed white.
+- A hidden/empty pane receiving a shared-directory delta no longer touches the
+  shared pipeline at all.
+- A result whose size differs from the panel's `m_thumbSize` is accepted at its
+  own size instead of being dropped (the singleton pipeline can hold another
+  pane's size); `thumbReady()`'s by-path fallback serves it.
+- `invalidateThumbnailCacheFor` normalises the path before matching cache keys.
+- `browse_rotate_thumbnail_tests` covers four scenarios, including MainWindow's
+  exact multi-pane order and a forced pipeline-size mismatch.
 
 ## 1.0.236 - review follow-up: Fft2D padding, export job threading (2026-11-27)
 

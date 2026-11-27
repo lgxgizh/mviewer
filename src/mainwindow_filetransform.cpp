@@ -179,12 +179,12 @@ void releaseSourceForRewrite(ImageViewer *viewer, PreviewPanel *preview, const Q
     ThumbnailProvider::invalidateSource(utf8);
 }
 
-void noteTransformSuccess(ThumbnailPanel *panel, const QString &path, const std::string &utf8)
+void noteTransformLocalOnly(ThumbnailPanel *panel, const QString &path)
 {
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
+    // The shared invalidation is done once by the caller; this only drops the
+    // panel's own cached thumbnail so it re-requests the rewritten file.
     if (panel)
-        panel->invalidateSourceImage(path);
+        panel->dropLocalThumbnailCache(path);
 }
 
 void refreshOpenImage(ImageViewer *viewer, PreviewPanel *preview, MetadataPanel *metadata,
@@ -560,14 +560,18 @@ void wireListedTransformRefresh(RotateFilesCommand &command,
 
 void MainWindow::refreshTransformedPaths(const QStringList &paths)
 {
+    // Shared source state is invalidated once for the whole batch; each pane then
+    // drops only its own cache. Invalidating per panel would cancel the decode an
+    // earlier pane just enqueued for the same path and leave that cell blank.
+    for (const QString &path : paths)
+        ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
     for (const QString &path : paths)
     {
-        const std::string utf8 = path.toUtf8().toStdString();
-        noteTransformSuccess(m_thumbnailPanel, path, utf8);
+        noteTransformLocalOnly(m_thumbnailPanel, path);
         if (m_secondaryThumbnailPanel)
-            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+            m_secondaryThumbnailPanel->dropLocalThumbnailCache(path);
         if (m_tertiaryThumbnailPanel)
-            m_tertiaryThumbnailPanel->invalidateSourceImage(path);
+            m_tertiaryThumbnailPanel->dropLocalThumbnailCache(path);
     }
     // A 90/270 rotate swaps the axes, so the scan-cached width/height (card
     // footer, Details column) must follow the rewritten file immediately.
