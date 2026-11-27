@@ -68,6 +68,8 @@ class DisplayAdjustController final : public QObject
 
   private:
     static QString lutLabelFor(int lutSize);
+    /// Push values into the panel without letting it re-announce them.
+    void syncPanelWidgets(const mviewer::core::DisplayAdjust &adjust);
     class Impl;
     Impl *m_impl = nullptr;
 };

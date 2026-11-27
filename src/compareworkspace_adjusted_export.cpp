@@ -1,13 +1,10 @@
 #include "compareworkspace_adjusted_export.h"
 
-#include "core/image/CellImageAdjust.h"
+#include "core/MainThreadDispatcher.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
 
-#include <QCoreApplication>
 #include <QFileInfo>
-#include <QPointer>
-#include <QThread>
 
 namespace mviewer::ui
 {
@@ -20,45 +17,66 @@ bool cancelled(const std::shared_ptr<std::atomic<bool>> &cancel,
         return true;
     return context != nullptr && context->isCancelled();
 }
+
+QString exportedName(const std::string &outPath)
+{
+    return QFileInfo(QString::fromUtf8(outPath.c_str())).fileName();
+}
 } // namespace
+
+void CompareAdjustedExportJob::finishAdjustAndEncode(
+    const Request &request, ImageData pixels, const TaskScheduler::TaskContext &context,
+    uint64_t generation, const std::shared_ptr<Shared> &shared)
+{
+    const auto stopped = [&]() { return cancelled(request.cancel, &context); };
+    if (stopped())
+        return;
+    const ImageData out = mviewer::core::applyCellImageAdjust(pixels, request.adjust, stopped);
+    QString failure;
+    if (stopped())
+        return;
+    if (out.isNull())
+        failure = QStringLiteral("Export failed: adjustment processing failed");
+    else if (!Encoder::encode(out, request.outPath))
+        failure = QStringLiteral("Export failed: cannot write file");
+    if (stopped())
+        return;
+    const QString text =
+        failure.isEmpty()
+            ? QStringLiteral("Tuning result exported: %1").arg(exportedName(request.outPath))
+            : failure;
+    const int msec = failure.isEmpty() ? 5000 : 6000;
+    mvcore::postToMainThread([shared, generation, text, msec]()
+                             {
+                                 if (!shared->alive.load(std::memory_order_acquire) ||
+                                     shared->generation.load(std::memory_order_acquire) != generation)
+                                     return;
+                                 if (shared->status)
+                                     shared->status(text, msec);
+                             });
+}
 
 CompareAdjustedExportJob::CompareAdjustedExportJob(
     QObject *parent, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime, StatusFn status)
-    : QObject(parent), m_lifetime(std::move(lifetime)), m_status(std::move(status))
+    : QObject(parent), m_lifetime(std::move(lifetime)), m_shared(std::make_shared<Shared>())
 {
+    m_shared->status = std::move(status);
+    // Only ever invoked from the owning thread, and only while `alive` is set.
+    m_shared->storeTask = [this](TaskScheduler::TaskHandle task) { m_task = std::move(task); };
 }
 
 CompareAdjustedExportJob::~CompareAdjustedExportJob()
 {
     cancel();
-}
-
-void CompareAdjustedExportJob::postStatus(const QString &text, int timeoutMs)
-{
-    // The adjust stage runs on a worker thread; the workspace draws from the
-    // status callback, so hop to this object's own thread first.
-    if (QThread::currentThread() == thread())
-    {
-        if (m_status)
-            m_status(text, timeoutMs);
-        return;
-    }
-    const QPointer<CompareAdjustedExportJob> guard(this);
-    const uint64_t generation = m_generation;
-    QMetaObject::invokeMethod(
-        this,
-        [this, guard, generation, text, timeoutMs]()
-        {
-            if (!guard || generation != m_generation || !m_status)
-                return;
-            m_status(text, timeoutMs);
-        },
-        Qt::QueuedConnection);
+    m_shared->alive.store(false, std::memory_order_release);
+    m_shared->status = nullptr;
+    m_shared->storeTask = nullptr;
 }
 
 void CompareAdjustedExportJob::cancel()
 {
     ++m_generation;
+    m_shared->generation.store(m_generation, std::memory_order_release);
     if (m_cancel)
         m_cancel->store(true, std::memory_order_relaxed);
     if (m_task)
@@ -82,78 +100,72 @@ void CompareAdjustedExportJob::start(const std::string &sourcePath, int frameInd
 
 void CompareAdjustedExportJob::launch(std::string sourcePath, int frameIndex, Request request)
 {
-    const uint64_t generation = m_generation;
+    m_generation = m_shared->generation.load(std::memory_order_acquire);
     m_cancel = request.cancel;
-    const QPointer<CompareAdjustedExportJob> guard(this);
+    const auto shared = m_shared;
+    const uint64_t generation = m_generation;
     const ImageLoadOptions opts{true, false, 256};
     m_handle = mviewer::application::ImageLoadingService::instance().loadFrameAsync(
         sourcePath, frameIndex,
-        [this, guard, generation, request](
-            const mviewer::application::ImageLoadingService::Result &res)
+        [shared, request, generation](const mviewer::application::ImageLoadingService::Result &res)
         {
-            if (!guard || !qApp || cancelled(request.cancel, nullptr))
+            // Repository/worker thread: captured values only.
+            if (!shared->alive.load(std::memory_order_acquire) ||
+                cancelled(request.cancel, nullptr))
                 return;
             const bool decoded = res.success() && res.frame && !res.frame->pixels().isNull();
             const ImageData pixels = decoded ? res.frame->pixels() : ImageData{};
-            // Everything below touches job members, so it happens on the owning
-            // thread rather than inside the repository's completion.
-            QMetaObject::invokeMethod(
-                this,
-                [this, guard, generation, request, decoded, pixels]() mutable
+            // Everything below needs the owning thread, so hop once.
+            mvcore::postToMainThread(
+                [shared, request, pixels, generation, decoded]()
                 {
-                    if (!guard || generation != m_generation)
+                    if (!shared->alive.load(std::memory_order_acquire) ||
+                        shared->generation.load(std::memory_order_acquire) != generation)
                         return;
                     if (!decoded)
                     {
-                        postStatus(QStringLiteral("Export failed: unable to decode the "
-                                                 "full-resolution image"),
-                                   6000);
+                        if (shared->status)
+                            shared->status(QStringLiteral("Export failed: unable to decode the "
+                                                         "full-resolution image"),
+                                           6000);
                         return;
                     }
                     TaskScheduler::TaskHandle task = TaskScheduler::instance().submit(
                         TaskScheduler::Priority::Analysis,
-                        [this, guard, generation, pixels, request](
-                            const TaskScheduler::TaskContext &ctx)
-                        { finish(pixels, request, ctx); });
+                        [request, pixels, generation, shared](const TaskScheduler::TaskContext &ctx)
+                        { finishAdjustAndEncode(request, pixels, ctx, generation, shared); });
                     if (!task)
                     {
-                        postStatus(QStringLiteral("Export failed: adjustment processing failed"),
-                                   6000);
+                        if (shared->status)
+                            shared->status(
+                                QStringLiteral("Export failed: adjustment processing failed"), 6000);
                         return;
                     }
-                    m_task = std::move(task);
-                },
-                Qt::QueuedConnection);
+                    // Registering the handle mutates job state, so it stays here on
+                    // the owning thread - dropped when superseded meanwhile.
+                    if (!shared->alive.load(std::memory_order_acquire) ||
+                        shared->generation.load(std::memory_order_acquire) != generation)
+                    {
+                        TaskScheduler::cancel(task);
+                        return;
+                    }
+                    if (shared->storeTask)
+                        shared->storeTask(std::move(task));
+                });
         },
         opts, m_lifetime);
     if (!m_handle)
-        postStatus(QStringLiteral("Export failed: unable to decode the full-resolution image"),
-                   6000);
-}
-
-void CompareAdjustedExportJob::finish(ImageData pixels, Request request,
-                                      const TaskScheduler::TaskContext &context)
-{
-    const auto stopped = [&]() { return cancelled(request.cancel, &context); };
-    if (stopped())
-        return;
-    const ImageData out = mviewer::core::applyCellImageAdjust(pixels, request.adjust, stopped);
-    if (stopped())
-        return;
-    if (out.isNull())
-    {
-        postStatus(QStringLiteral("Export failed: adjustment processing failed"), 6000);
-        return;
-    }
-    if (!stopped() && !Encoder::encode(out, request.outPath))
-    {
-        postStatus(QStringLiteral("Export failed: cannot write file"), 6000);
-        return;
-    }
-    if (stopped())
-        return;
-    const QString name = QFileInfo(QString::fromUtf8(request.outPath.c_str())).fileName();
-    postStatus(QStringLiteral("Tuning result exported: %1").arg(name), 5000);
+        mvcore::postToMainThread(
+            [shared, generation]()
+            {
+                if (!shared->alive.load(std::memory_order_acquire) ||
+                    shared->generation.load(std::memory_order_acquire) != generation)
+                    return;
+                if (shared->status)
+                    shared->status(QStringLiteral("Export failed: unable to decode the "
+                                                 "full-resolution image"),
+                                   6000);
+            });
 }
 
 } // namespace mviewer::ui

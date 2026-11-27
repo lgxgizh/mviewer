@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+## [1.0.236] - 2026-11-27
+
+### Fixed — review follow-up on the v1.0.223–v1.0.235 batch
+
+**P0**
+
+- **`Fft2D` produced a wrong spectrum for every width that is not a power of
+  two.** The column pass was limited to `x < width`, but after the row pass the
+  energy of rows `0..height-1` is spread across *all* `paddedW` columns, so the
+  right-hand columns never got their vertical transform (1920 -> 2048, 300 ->
+  512, …). Restored the full `paddedW` sweep; padding *rows* stay zero and need
+  no special case. `fft2d_tests` now checks a 12x10 image against a naive DFT on
+  the same padded plane (worst bin error reported).
+- **`CompareAdjustedExportJob` touched `this` from worker threads.** Workers read
+  the non-atomic generation counter, built `QPointer`s and called
+  `invokeMethod(this, …)` off-thread while the destructor could run concurrently.
+  Rewritten: worker callbacks carry a shared state block (`alive` + atomic
+  generation + status) by value, never touch the job, and deliver exclusively
+  through `mvcore::postToMainThread`; the shared block also decides whether a
+  delivery still applies. The export test installs the Qt dispatcher so the hops
+  are real.
+
+**P1 — `DisplayAdjustController`**
+
+- **Reset left the sliders, Auto-Stretch switch and LUT label showing the old
+  values.** `resetToIdentity()` now pushes the identity back into the panel
+  (behind a `QSignalBlocker`).
+- **`setAutoAnchored(false)` did not actually disable anchoring** — the anchor was
+  still installed, so resizing the image viewer dragged the panel to the top-right
+  and over the scope/spectrum overlays. The anchor is now created only when auto
+  anchoring is requested.
+- **`setAdjustPanelVisible(true)` on an already visible panel hid it**, because
+  the controller toggles. It now returns early when the requested state matches.
+
+**P2**
+
+- `attach()`/`detach()` released the previous panel/anchor without uninstalling
+  the event filter or clearing the action's checked state.
+- `UpdateChecker`: a canonical release URL is exactly five path segments, so
+  `< 5` is now `!= 5`.
+
 ## [1.0.235] - 2026-11-27
 
 ### Fixed

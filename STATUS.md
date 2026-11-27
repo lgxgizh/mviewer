@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.235** · Release tag: **v1.0.235**
+> Snapshot: 2026-11-27 · Version: **1.0.236** · Release tag: **v1.0.236**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,20 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.236 - review follow-up: Fft2D padding, export job threading (2026-11-27)
+
+- **P0** `Fft2D`: the column sweep must cover all `paddedW` columns (the row pass
+  spreads energy into the padded region); restored, with a 12x10 vs naive-DFT
+  regression test.
+- **P0** `CompareAdjustedExportJob`: worker callbacks no longer touch `this`;
+  they carry a shared alive/generation/status block by value and deliver via
+  `mvcore::postToMainThread`.
+- **P1** `DisplayAdjustController`: Reset now syncs the panel widgets; the anchor
+  is only installed when auto-anchoring is on; `setAdjustPanelVisible(true)` on a
+  visible panel no longer hides it.
+- **P2** attach/detach cleans up the old panel/anchor/action;
+  `UpdateChecker` uses `!= 5` for the canonical release URL segments.
 
 ## 1.0.235 - Browse rotate no longer blanks the gallery thumbnail (2026-11-27)
 

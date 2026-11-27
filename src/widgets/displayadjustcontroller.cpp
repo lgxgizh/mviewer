@@ -9,6 +9,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSignalBlocker>
 
 namespace mviewer::ui
 {
@@ -70,13 +71,30 @@ DisplayAdjustController::~DisplayAdjustController()
 
 void DisplayAdjustController::attach(QWidget *host, CurrentFn current, ApplyFn apply)
 {
+    // Drop the previous session's panel/anchor first: leaving them behind would
+    // keep a hidden panel alive, its event filter installed on the old host and
+    // the action checked after a detach.
+    if (m_impl->anchor)
+    {
+        if (m_impl->host)
+            m_impl->host->removeEventFilter(m_impl->anchor);
+        m_impl->anchor->deleteLater();
+        m_impl->anchor = nullptr;
+    }
+    if (m_impl->panel)
+    {
+        m_impl->panel->hide();
+        m_impl->panel->deleteLater();
+        m_impl->panel = nullptr;
+    }
+    if (m_impl->action)
+    {
+        m_impl->action->setChecked(false);
+        m_impl->action->setEnabled(host != nullptr);
+    }
     m_impl->host = host;
     m_impl->current = std::move(current);
     m_impl->apply = std::move(apply);
-    m_impl->panel = nullptr;
-    m_impl->anchor = nullptr;
-    if (m_impl->action)
-        m_impl->action->setEnabled(host != nullptr);
 }
 
 void DisplayAdjustController::detach()
@@ -145,10 +163,18 @@ void DisplayAdjustController::toggle()
         connect(panel, &mviewer::ui::DisplayAdjustPanel::loadLutRequested, this,
                 &DisplayAdjustController::loadLut);
 
-        m_impl->anchor = new AdjustAnchor(panel, m_impl->host.data());
-        m_impl->host->installEventFilter(m_impl->anchor);
-        panel->show();
+        bool anchorPlaced = false;
+        // Hosts that lay out their own overlays (the image viewer, via
+        // layoutFloatingOverlays) must not get an anchor: it would fight the
+        // layout on every resize and drag the panel over the scope/spectrum.
         if (m_impl->autoAnchored)
+        {
+            m_impl->anchor = new AdjustAnchor(panel, m_impl->host.data());
+            m_impl->host->installEventFilter(m_impl->anchor);
+            anchorPlaced = true;
+        }
+        panel->show();
+        if (anchorPlaced)
             m_impl->anchor->place();
     }
     else if (m_impl->panel)
@@ -195,6 +221,21 @@ void DisplayAdjustController::setAutoStretch(bool on)
 void DisplayAdjustController::resetToIdentity()
 {
     m_impl->publish(mviewer::core::DisplayAdjust{});
+    syncPanelWidgets(mviewer::core::DisplayAdjust{});
+}
+
+void DisplayAdjustController::syncPanelWidgets(const mviewer::core::DisplayAdjust &adjust)
+{
+    // The panel only announces changes; it does not apply them. After a reset (or
+    // when the host's adjust changed elsewhere) the sliders, the switch and the
+    // LUT label would otherwise keep showing the old values.
+    if (!m_impl->panel)
+        return;
+    const QSignalBlocker blocker(m_impl->panel);
+    m_impl->panel->setExposure(adjust.exposureEv);
+    m_impl->panel->setGamma(adjust.gamma);
+    m_impl->panel->setAutoStretch(adjust.autoStretch);
+    m_impl->panel->setLutLabel(lutLabelFor(adjust.lutSize));
 }
 
 void DisplayAdjustController::loadLut()

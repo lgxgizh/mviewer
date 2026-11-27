@@ -352,7 +352,9 @@ bool isGitHubReleaseUrlFor(const std::string &candidate, const std::string &owne
     if (url.host().compare(QStringLiteral("github.com"), Qt::CaseInsensitive) != 0)
         return false;
     const QStringList segments = url.path().split(QLatin1Char('/'), Qt::SkipEmptyParts);
-    if (segments.size() < 5 || segments.at(2) != QLatin1String("releases") ||
+    // .../owner/repo/releases/tag/<tag> is exactly five path segments; a longer
+    // path (a suffix, another action) is not this release's canonical URL.
+    if (segments.size() != 5 || segments.at(2) != QLatin1String("releases") ||
         segments.at(3) != QLatin1String("tag"))
         return false;
     if (segments.at(4).toStdString() != tagName)

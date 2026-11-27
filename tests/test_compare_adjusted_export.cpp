@@ -3,6 +3,7 @@
 // callback on the owning thread.
 #include "compareworkspace_adjusted_export.h"
 
+#include "core/MainThreadDispatcher.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/image/CellImageAdjust.h"
 #include "core/image/Decoder.h"
@@ -63,6 +64,10 @@ bool waitFor(const std::function<bool()> &predicate, int timeoutMs)
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    // The job delivers its status and task bookkeeping through the process
+    // dispatcher; install the Qt one so deliveries really hop to this thread.
+    mvcore::setMainThreadDispatcher([](std::function<void()> fn)
+                                    { QMetaObject::invokeMethod(qApp, std::move(fn), Qt::QueuedConnection); });
     setbuf(stdout, nullptr);
 
     QTemporaryDir dir;

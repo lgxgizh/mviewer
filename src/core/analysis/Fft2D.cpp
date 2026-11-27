@@ -109,9 +109,12 @@ Fft2DResult computeFftMagnitude(const std::vector<float> &samples, int width, in
         for (int x = 0; x < paddedW; ++x)
             plane[static_cast<size_t>(y) * paddedW + x] = row[static_cast<size_t>(x)];
     }
-    // Columns. Same argument: columns at or beyond `width` are entirely padding.
+    // Columns. Every padded column carries energy after the row pass (the row
+    // FFT spreads each row across all paddedW columns), so all of them must be
+    // transformed - including x in [width, paddedW). Only the padding *rows*
+    // (y >= height) stay zero, which the radix-2 transform handles as-is.
     std::vector<Complex> column(static_cast<size_t>(paddedH));
-    for (int x = 0; x < width; ++x)
+    for (int x = 0; x < paddedW; ++x)
     {
         for (int y = 0; y < paddedH; ++y)
             column[static_cast<size_t>(y)] = plane[static_cast<size_t>(y) * paddedW + x];

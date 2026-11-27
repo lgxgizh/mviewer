@@ -115,6 +115,59 @@ int main()
     dc.magnitude[63 * 64 + 63] = 100.0f;
     CHECK(!hasOffAxisPeak(dc, 4.0), "a lone DC corner does not trip the tripwire");
 
+    // Non-power-of-two sizes: the column pass must still transform every padded
+    // column, because the row pass spreads each row's energy across all of them.
+    // Compare against a naive DFT on the same padded plane.
+    {
+        const int w = 12;
+        const int h = 10;
+        std::vector<float> img(static_cast<size_t>(w) * static_cast<size_t>(h));
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                img[static_cast<size_t>(y) * w + x] =
+                    static_cast<float>(((x * 7 + y * 3) % 11) - 5);
+        const auto got = computeFftMagnitude(img, w, h);
+        CHECK(got.width == 16 && got.height == 16, "a 12x10 image pads to 16x16");
+
+        double mean = 0.0;
+        for (const float v : img)
+            mean += v;
+        mean /= static_cast<double>(img.size());
+
+        std::vector<std::vector<double>> plane(
+            static_cast<size_t>(16), std::vector<double>(16, 0.0));
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                plane[static_cast<size_t>(y)][static_cast<size_t>(x)] = img[static_cast<size_t>(y) * w + x] - mean;
+
+        double worst = 0.0;
+        for (int v = 0; v < 16; ++v)
+        {
+            for (int u = 0; u < 16; ++u)
+            {
+                double re = 0.0;
+                double im = 0.0;
+                for (int y = 0; y < 16; ++y)
+                {
+                    for (int x = 0; x < 16; ++x)
+                    {
+                        const double phase = -2.0 * 3.14159265358979323846 *
+                                              (static_cast<double>(u) * x / 16.0 +
+                                               static_cast<double>(v) * y / 16.0);
+                        re += plane[static_cast<size_t>(y)][static_cast<size_t>(x)] * std::cos(phase);
+                        im += plane[static_cast<size_t>(y)][static_cast<size_t>(x)] * std::sin(phase);
+                    }
+                }
+                const double expected = std::sqrt(re * re + im * im) / (16.0 * 16.0);
+                const double actual =
+                    got.magnitude[static_cast<size_t>(v) * got.width + static_cast<size_t>(u)];
+                worst = std::max(worst, std::abs(expected - actual));
+            }
+        }
+        printf("  (12x10 vs naive DFT, worst bin error %.3e)\n", worst);
+        CHECK(worst < 1e-4, "non-power-of-two FFT matches a naive DFT on the padded plane");
+    }
+
     printf("\n==== FFT2D test: %d passed, %d failed ====\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

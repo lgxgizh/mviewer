@@ -71,18 +71,15 @@ void ImageViewer::setAdjustPanelVisible(bool visible)
                 setDisplayColorContext(next);
             });
     }
+    // Guard the requested state: toggle() flips, so asking to show an already
+    // visible panel would hide it.
+    if (visible == isAdjustPanelVisible())
+        return;
+    d->tools.adjust->toggle();
     if (visible)
     {
-        d->tools.adjust->toggle();
-        if (isAdjustPanelVisible())
-        {
-            layoutFloatingOverlays();
-            if (auto *panel = d->tools.adjust->panelWidget())
-                panel->raise();
-        }
-    }
-    else if (d->tools.adjust->isPanelVisible())
-    {
-        d->tools.adjust->toggle();
+        layoutFloatingOverlays();
+        if (auto *panel = d->tools.adjust->panelWidget())
+            panel->raise();
     }
 }

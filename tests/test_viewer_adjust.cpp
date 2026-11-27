@@ -90,6 +90,17 @@ int main(int argc, char **argv)
     pump(10);
     CHECK(!viewer.isAdjustPanelVisible(), "the panel hides again");
 
+    // Asking to show an already visible panel must not flip it off.
+    viewer.setAdjustPanelVisible(true);
+    pump(10);
+    CHECK(viewer.isAdjustPanelVisible(), "the panel is shown");
+    viewer.setAdjustPanelVisible(true);
+    pump(10);
+    CHECK(viewer.isAdjustPanelVisible(), "re-asking to show keeps the panel visible");
+    viewer.setAdjustPanelVisible(false);
+    pump(10);
+    CHECK(!viewer.isAdjustPanelVisible(), "and it still hides on request");
+
     if (g_failures != 0)
     {
         std::cout << "viewer_adjust_tests: FAIL (" << g_failures << " failures)\n";

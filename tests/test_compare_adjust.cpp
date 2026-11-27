@@ -5,8 +5,15 @@
 #include "widgets/displayadjustcontroller.h"
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QImage>
+#include <QList>
+#include <QPainter>
+#include <QPoint>
+#include <QPushButton>
+#include <QSlider>
 #include <QTemporaryDir>
+#include <QWidget>
 
 #include <functional>
 #include <iostream>
@@ -33,6 +40,15 @@ QString writePng(QTemporaryDir &dir, const QString &name, const QColor &color)
     image.fill(color);
     const QString path = dir.filePath(name);
     return image.save(path, "PNG") ? path : QString();
+}
+
+void pump(int ms)
+{
+    QElapsedTimer timer;
+    timer.start();
+    do
+        QApplication::processEvents(QEventLoop::AllEvents, 10);
+    while (timer.elapsed() < ms);
 }
 } // namespace
 
@@ -67,6 +83,29 @@ int main(int argc, char **argv)
     CHECK(!controller.isPanelVisible(), "the adjust panel starts hidden");
     controller.toggle();
     CHECK(controller.isPanelVisible(), "toggle shows the panel");
+
+    // The panel only announces changes; the controller must push values back into
+    // it after a reset, or the widgets keep showing the pre-reset state.
+    QWidget *panel = controller.panelWidget();
+    CHECK(panel != nullptr, "the panel widget exists once shown");
+    const QList<QSlider *> sliders = panel->findChildren<QSlider *>();
+    CHECK(sliders.size() == 2, "the panel has the exposure and gamma sliders");
+    if (sliders.size() == 2)
+    {
+        const int baseExposure = sliders.at(0)->value();
+        const int baseGamma = sliders.at(1)->value();
+        // Simulate the user dragging both sliders away from neutral.
+        sliders.at(0)->setValue(qBound(sliders.at(0)->minimum(), baseExposure + 5,
+                                      sliders.at(0)->maximum()));
+        sliders.at(1)->setValue(qBound(sliders.at(1)->minimum(), baseGamma - 5,
+                                      sliders.at(1)->maximum()));
+        CHECK(sliders.at(0)->value() != baseExposure && sliders.at(1)->value() != baseGamma,
+              "dragging the sliders moves them (and reaches the host)");
+        controller.resetToIdentity();
+        CHECK(sliders.at(0)->value() == baseExposure && sliders.at(1)->value() == baseGamma,
+              "reset puts the panel sliders back to their neutral positions");
+    }
+
     controller.toggle();
     CHECK(!controller.isPanelVisible(), "toggle hides it again");
 
@@ -93,6 +132,31 @@ int main(int argc, char **argv)
     controller.setExposure(3.0);
     CHECK(ws.displayColorContext().adjust.exposureEv == 0.0,
           "after detach the controller cannot touch the workspace");
+
+    // Hosts that lay out their own overlays must not get a top-right anchor: it
+    // would fight the layout on every resize.
+    QWidget host;
+    host.resize(420, 320);
+    host.show();
+    pump(20);
+    mviewer::ui::DisplayAdjustController floating;
+    floating.setAutoAnchored(false);
+    floating.attach(
+        &host,
+        []() { return mviewer::core::DisplayAdjust{}; },
+        [](const mviewer::core::DisplayAdjust &) {});
+    floating.toggle();
+    QWidget *unanchored = floating.panelWidget();
+    CHECK(unanchored != nullptr, "the non-anchored panel was created");
+    if (unanchored)
+    {
+        const QPoint before = unanchored->pos();
+        host.resize(680, 480);
+        pump(40);
+        CHECK(unanchored->pos() == before,
+              "without auto-anchor a host resize does not drag the panel around");
+    }
+    floating.detach();
 
     if (g_failures != 0)
     {

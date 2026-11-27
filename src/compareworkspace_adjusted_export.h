@@ -9,8 +9,11 @@
 // used to be four members plus three methods inside the workspace header, and the
 // whole pipeline lived in the same TU as the sliders that trigger it.
 //
-// Lifecycle: create once per workspace, call start() for each export, cancel()
-// before starting another one or when the session ends.
+// Threading: every worker callback carries its state BY VALUE (shared block,
+// generation, request). Nothing on a worker touches `this`; the only thing that
+// reaches the owning thread is a `mvcore::postToMainThread` hop, and the shared
+// block's `alive` flag plus the generation counter decide whether the delivery
+// still applies. Same discipline as PythonScriptRunner.
 
 #include <QObject>
 #include <QString>
@@ -59,16 +62,30 @@ class CompareAdjustedExportJob final : public QObject
         std::shared_ptr<std::atomic<bool>> cancel;
     };
 
+    /// State shared with worker callbacks. Owns no QObject, so workers may hold
+    /// it safely after the job itself is gone.
+    struct Shared
+    {
+        std::atomic<bool> alive{true};
+        std::atomic<uint64_t> generation{0};
+        StatusFn status;
+        std::function<void(TaskScheduler::TaskHandle)> storeTask; // owner thread only
+    };
+
+    /// Runs on the Analysis pool; touches nothing but its arguments and delivers
+    /// through the owning thread's dispatcher.
+    static void finishAdjustAndEncode(const Request &request, ImageData pixels,
+                                      const TaskScheduler::TaskContext &context,
+                                      uint64_t generation, const std::shared_ptr<Shared> &shared);
+
     void launch(std::string sourcePath, int frameIndex, Request request);
-    void finish(ImageData pixels, Request request, const TaskScheduler::TaskContext &context);
-    void postStatus(const QString &text, int timeoutMs);
 
     std::weak_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
-    StatusFn m_status;
-    uint64_t m_generation = 0;
+    std::shared_ptr<Shared> m_shared;
+    uint64_t m_generation = 0; // owner thread only (mirrors shared->generation)
     std::shared_ptr<std::atomic<bool>> m_cancel;
     mviewer::application::ImageLoadingService::AsyncRequestHandle m_handle;
-    TaskScheduler::TaskHandle m_task;
+    TaskScheduler::TaskHandle m_task; // owner thread only
 };
 
 } // namespace mviewer::ui
