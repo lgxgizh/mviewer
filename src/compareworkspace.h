@@ -192,6 +192,11 @@ class CompareWorkspace : public QWidget
     bool forwardFocusedCompareKey(QEvent *event);
 
   private:
+    // Panel widgets live in `d` (compareworkspace_p.h); keeping them there keeps this
+    // header well below its line ceiling.
+    struct Private;
+    std::unique_ptr<Private> d; // built in the constructor
+
     using NavState = mviewer::cw::NavState;
     using InspectorSample = mviewer::cw::InspectorSample;
     using DiffBatchResult = mviewer::cw::DiffBatchResult;
@@ -288,11 +293,6 @@ class CompareWorkspace : public QWidget
     // Background only while the next pair is still soft-loading.
     TaskScheduler::Priority deferredAnalysisPriority() const;
     void releaseSessionMemory();
-    QCheckBox *m_syncZoomChk = nullptr;
-    QCheckBox *m_syncDragChk = nullptr;
-    QCheckBox *m_syncRotateChk = nullptr;
-    QCheckBox *m_syncRotatePanelChk = nullptr;
-    QCheckBox *m_uniformScaleChk = nullptr; // H5: Uniform Pixel Scale
     bool m_syncZoom = true;
     bool m_syncDrag = true;
     bool m_syncRotate = false;
@@ -303,18 +303,11 @@ class CompareWorkspace : public QWidget
     bool m_postLayoutFitPending = false;
     bool m_preserveFitPending = false;
     void schedulePostLayoutFit();
-    QWidget *m_grid = nullptr;
-    QGridLayout *m_layout = nullptr;
     QWidget *m_compareCanvas = nullptr;
     QImage m_canvasBaseSurface;
     QByteArray m_canvasBaseKey;
     quint64 m_canvasBaseRenderCount = 0;
-    QWidget *m_compareGridPage = nullptr;
     // Non-modal loading/empty page for the current async batch.
-    QWidget *m_compareLoadingPage = nullptr;
-    QLabel *m_compareLoadingLabel = nullptr;
-    QProgressBar *m_compareLoadingProgress = nullptr;
-    QStackedLayout *m_pageStack = nullptr;
     QStackedLayout *buildCanvasPage();
     QList<QLabel *> m_cellLabels;
     QList<RawImageView *> m_cellViews;
@@ -354,10 +347,7 @@ class CompareWorkspace : public QWidget
     mviewer::ui::ROIMeasurementState m_roiState = mviewer::ui::ROIMeasurementState::Idle;
     QString m_roiStateDetail;
     std::optional<ROIStatsBatchResult> m_roiResult;
-    QCheckBox *m_blinkChk = nullptr;
-    QTimer *m_blinkTimer = nullptr;
     bool m_blinkState = false;
-    QPushButton *m_temporaryCompareButton = nullptr;
     bool m_temporaryCompareActive = false;
     int m_temporaryTargetPane = -1;
     int m_temporarySourcePane = -1; // image shown in the target pane while switched
@@ -413,7 +403,6 @@ class CompareWorkspace : public QWidget
     QRectF cellDestRect(int idx, const QRectF &geom) const;
     double canvasOffsetRatio(int pane) const; // canvas pixels per stored offset pixel
     double displayedScale(int pane) const;    // zoom actually drawn (canvas-aware)
-    QCheckBox *m_splitChk = nullptr;
     QCheckBox *m_swipeChk = nullptr;
     double m_splitPos = 0.5;
     bool m_splitDragging = false;
@@ -425,27 +414,18 @@ class CompareWorkspace : public QWidget
     mviewer::domain::SelectionHandle m_canvasSelectionHandle =
         mviewer::domain::SelectionHandle::None;
     int m_canvasSelectionPane = 0;
-    QCheckBox *m_overlayChk = nullptr;
-    QSlider *m_overlayAlphaSlider = nullptr; // 0–100 → opacity of top image
-    QLabel *m_overlayAlphaLabel = nullptr;
     int m_overlayAlpha = 45; // percent
     void drawSplitCompare(QPainter &p);
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
     void drawCellCompare(QPainter &p, int idx, const QRect &clipRect, const QRectF &geomRect);
     // M23: checkerboard compare mode — alternating A/B blocks.
-    QCheckBox *m_checkerChk = nullptr;
-    QSlider *m_checkerSizeSlider = nullptr;
-    QLabel *m_checkerSizeLabel = nullptr;
     int m_checkerSize = 64; // block edge length in widget pixels
     void buildCheckerboardControls(QHBoxLayout *lay);
     void drawCheckerboardCompare(QPainter &p);
     bool anyCanvasCompareMode() const;
 
     // A-4.3: Pixel Link — mark corresponding image-space points across cells.
-    QCheckBox *m_pixelLinkChk = nullptr;
-    QPushButton *m_clearLinksBtn = nullptr;
-    QLabel *m_linkInfoLabel = nullptr;
     QVector<QPointF> m_linkPoints; // shared image-space markers (top-left origin)
     void onPixelLinkToggled(bool on);
     void addLinkPoint(const QPointF &imgPt);
@@ -455,9 +435,6 @@ class CompareWorkspace : public QWidget
     void drawPixelLinkLines(QPainter &p);
 
     // A-4.6: Diff highlight mode (red diffs / gray similar) vs heatmap.
-    QCheckBox *m_diffHighlightChk = nullptr;
-    QCheckBox *m_diffOverlayChk = nullptr;
-    QComboBox *m_diffGainCombo = nullptr;
     bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
     // Highlight Diff switched Show Difference on by itself; switching highlight off undoes it.
@@ -465,8 +442,6 @@ class CompareWorkspace : public QWidget
     double m_diffGain = 1.0;
 
     // A-4.2: custom grid is column-driven; rows are derived by CompareEngine.
-    QSpinBox *m_gridColsSpin = nullptr;
-    QLabel *m_layoutStatusLabel = nullptr;
     void onCustomGridChanged();
 
     // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
@@ -481,9 +456,6 @@ class CompareWorkspace : public QWidget
     void exclusiveMode(QCheckBox *keepOn); // uncheck other exclusive modes
 
     // M15: difference threshold
-    QSlider *m_thresholdSlider = nullptr;
-    QLabel *m_thresholdLabel = nullptr;
-    QPushButton *m_autoThresholdBtn = nullptr;
     uint8_t m_thresholdValue = 0;
     uint8_t m_suggestedThreshold = 0;
     bool m_hasSuggestedThreshold = false;
@@ -492,17 +464,12 @@ class CompareWorkspace : public QWidget
     void noteSuggestedThreshold(bool hasSuggestion, int value);
 
     // P0 #③: explicit multi-layout selector.
-    QComboBox *m_layoutCombo = nullptr;
-    QComboBox *m_channelCombo = nullptr;
     mviewer::OverlayMode m_displayOverlay = mviewer::OverlayMode::None;
     void applyDisplayOverlayToViews();
     void onLayoutChanged();
     void updateLayoutStatus();
 
     // P0 #③: collapsible inspector + histogram side panel.
-    QCheckBox *m_sideChk = nullptr;
-    QWidget *m_sidePanel = nullptr;
-    QTableWidget *m_inspector = nullptr;
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
@@ -528,23 +495,8 @@ class CompareWorkspace : public QWidget
     void buildROIMeasurementPanel(QVBoxLayout *sideLayout);
     void buildSecondaryEditControls(QVBoxLayout *editLayout);
     void finishPresetRestore(uint64_t displayGenBeforeRestore);
-    QComboBox *m_csCombo = nullptr;     // inspector colour space selector
-    QComboBox *m_kernelCombo = nullptr; // neighborhood kernel (1/3/5/7)
-    QLabel *m_coordLabel = nullptr;     // hovered pixel coordinate readout
-    QLabel *m_statsLabel = nullptr;     // neighborhood mean/σ of base cell
-    QLabel *m_histTitle = nullptr;      // histogram section title (ROI aware)
-    QCheckBox *m_histRChk = nullptr, *m_histGChk = nullptr, *m_histBChk = nullptr;
-    QCheckBox *m_histLumaChk = nullptr, *m_histVChk = nullptr, *m_histLogChk = nullptr;
-    QCheckBox *m_roiHistChk = nullptr; // limit histogram to the current ROI
-    QLabel *m_roiStatusLabel = nullptr, *m_roiGeometryLabel = nullptr, *m_roiDeltaLabel = nullptr;
-    QTableWidget *m_roiTable = nullptr;
-    QPushButton *m_clearRoiBtn = nullptr, *m_copyRoiBtn = nullptr, *m_roiHud = nullptr;
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
-    QCheckBox *m_crosshairChk = nullptr; // sync crosshair toggle
-    QPushButton *m_focusBtn = nullptr;   // lock/unlock reference
-    QLabel *m_focusLabel = nullptr, *m_frameLabel = nullptr;
-    QSpinBox *m_frameSpin = nullptr;
     int m_focusIndex = -1, m_hoverIdx = -1, m_lastInspectX = -1, m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
@@ -698,18 +650,6 @@ class CompareWorkspace : public QWidget
     static QSize transformedSourceDims(const QSize &sourceDims, const CellAdjust &displayAdjust);
 
     // Edit panel widgets (inside side panel)
-    QWidget *m_editPanel = nullptr;
-    QLabel *m_editLabel = nullptr; // shows which cell is being edited
-    QSlider *m_brightSlider = nullptr, *m_contrastSlider = nullptr, *m_gammaSlider = nullptr;
-    QSlider *m_rGainSlider = nullptr, *m_bGainSlider = nullptr;
-    QLabel *m_brightVal = nullptr, *m_contrastVal = nullptr, *m_gammaVal = nullptr;
-    QLabel *m_rGainVal = nullptr, *m_bGainVal = nullptr, *m_rotVal = nullptr;
-    QPushButton *m_resetAdjBtn = nullptr;
-    QCheckBox *m_usmChk = nullptr, *m_usmLumaChk = nullptr;
-    QSlider *m_usmAmountSlider = nullptr, *m_usmRadiusSlider = nullptr;
-    QSlider *m_usmThresholdSlider = nullptr;
-    QLabel *m_usmAmountVal = nullptr, *m_usmRadiusVal = nullptr, *m_usmThresholdVal = nullptr;
-    QPushButton *m_exportAdjustedBtn = nullptr;
     // The asynchronous part of "export this pane's tuning result" lives in its own
     // job (cancel flag, decode handle, worker task, stale-completion generation).
     std::unique_ptr<mviewer::ui::CompareAdjustedExportJob> m_adjustedExport;
@@ -729,7 +669,6 @@ class CompareWorkspace : public QWidget
     void cancelAdjustedExport();
 
     // ── M16.4: quick PSNR/SSIM metrics ──
-    QLabel *m_metricLabel = nullptr;
     // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
     ImageData adjustedPixels(int cellIdx) const;
     void onAdjEditFinished();
@@ -755,9 +694,6 @@ class CompareWorkspace : public QWidget
 
     uint64_t m_histGen = 0;
     TaskScheduler::TaskHandle m_histTask;
-    QCheckBox *m_paneHistOverlayChk = nullptr;
-    QCheckBox *m_filenameOverlayChk = nullptr;
-    QCheckBox *m_pixelGridChk = nullptr;
     bool m_pixelGridEnabled = false;
     bool m_filenameOverlay = true; // checkbox shows or hides the top name; default visible
     void applyFilenameOverlays();
@@ -766,30 +702,23 @@ class CompareWorkspace : public QWidget
     std::vector<mviewer::core::Histogram> m_paneHistCache; // per image; empty r = not computed
     std::vector<HistogramWidget *> m_cellHists;
     bool m_perPaneHist = false;
-    QCheckBox *m_perPaneHistChk = nullptr;
     void onPerPaneHistToggled(bool on);
 
     // ── M16.6: layout presets save/load ──
-    QPushButton *m_savePresetBtn = nullptr, *m_loadPresetBtn = nullptr;
     QString m_presetDir;
     void onSavePreset();
     void onLoadPreset();
     void restorePresetAdjustments(const QJsonObject &root);
     void restorePresetSession(const QJsonObject &root);
     void ensurePresetDir();
-    QPushButton *m_swapBtn = nullptr;
     void onSwapPanes();
     SelectionModel *m_selection = nullptr;
-    QPushButton *m_analyzeBtn = nullptr, *m_exportReportBtn = nullptr, *m_exitBtn = nullptr;
-    QCheckBox *m_autoAlignChk = nullptr;
     bool m_autoAlignBeforeDiff = false; // in-memory "autoAlignBeforeDiff"
-    QLabel *m_compareStatusLabel = nullptr;
     QWidget *buildStatusStrip();
     void closeCompareHost();
     void showCompareStatus(const QString &text, int msec = 3000);
     void applyCompareSafeInsets();
     void syncContextualCompareControls();
-    QDialog *m_shortcutHelpDialog = nullptr;
     std::unique_ptr<mviewer::ui::CompareSessionState> m_sessionState;
     std::unique_ptr<mviewer::ui::CompareRoiController> m_roiController;
     std::unique_ptr<mviewer::ui::CompareDiffRenderer> m_diffRenderer;

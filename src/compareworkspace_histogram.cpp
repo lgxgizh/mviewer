@@ -49,10 +49,10 @@ void CompareWorkspace::clearMainHistogramForEmptyPlan(bool updateMain)
 {
     if (!(updateMain && m_hist))
         return;
-    if (m_histTitle)
+    if (d->histTitle)
     {
-        const bool useRoi = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
-        m_histTitle->setText(histogramTitleText(useRoi, m_lastSelection));
+        const bool useRoi = d->roiHistChk && d->roiHistChk->isChecked() && !m_lastSelection.isEmpty();
+        d->histTitle->setText(histogramTitleText(useRoi, m_lastSelection));
     }
     m_hist->setHistograms({});
 }
@@ -246,7 +246,7 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     // Linked panes share m_lastSelection. Unlinked panes each keep the
     // rectangle on that view; an empty selection is not a crop.
-    const bool roiToggle = m_roiHistChk && m_roiHistChk->isChecked();
+    const bool roiToggle = d->roiHistChk && d->roiHistChk->isChecked();
     const bool linkedRoi = linkedROIAvailable();
     std::vector<mviewer::domain::Selection> rois(static_cast<size_t>(paneCount));
     if (roiToggle)
@@ -316,7 +316,7 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
         // the value-only state captured at schedule time — never a new ROI
         // title over stale data. An empty main result clears the current
         // histogram (zero-image / no-valid-source current state).
-        if (m_histTitle)
+        if (d->histTitle)
         {
             QString title;
             if (r.roiPane == -2 && r.roiEnabled)
@@ -365,8 +365,8 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                 if (!tipLines.isEmpty())
                     tip = tipLines.join(QLatin1Char('\n'));
             }
-            m_histTitle->setText(title);
-            m_histTitle->setToolTip(tip);
+            d->histTitle->setText(title);
+            d->histTitle->setToolTip(tip);
         }
         m_hist->setHistograms(r.main);
     }

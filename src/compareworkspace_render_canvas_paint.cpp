@@ -35,9 +35,9 @@ void CompareWorkspace::paintCompareCanvas()
     QByteArray key;
     QDataStream stream(&key, QIODevice::WriteOnly);
     stream << cv->size() << cv->devicePixelRatioF() << m_splitPos << m_overlayAlpha << m_checkerSize
-           << static_cast<int>(m_displayOverlay) << (m_splitChk && m_splitChk->isChecked())
-           << (m_swipeChk && m_swipeChk->isChecked()) << (m_overlayChk && m_overlayChk->isChecked())
-           << (m_checkerChk && m_checkerChk->isChecked()) << m_canvasTemporaryPane;
+           << static_cast<int>(m_displayOverlay) << (d->splitChk && d->splitChk->isChecked())
+           << (m_swipeChk && m_swipeChk->isChecked()) << (d->overlayChk && d->overlayChk->isChecked())
+           << (d->checkerChk && d->checkerChk->isChecked()) << m_canvasTemporaryPane;
     for (int index = 0; index < 2; ++index)
     {
         const RawImageView *view = m_cellViews[index];
@@ -85,7 +85,7 @@ void CompareWorkspace::paintCompareCanvas()
             // L6: in Split, Space must stay in the hovered half — not full canvas
             // (full-canvas was a 2x jump of center and scale). The other half
             // keeps showing its own image instead of going blank.
-            if (m_splitChk && m_splitChk->isChecked())
+            if (d->splitChk && d->splitChk->isChecked())
             {
                 for (int slot = 0; slot < 2; ++slot)
                 {
@@ -100,13 +100,13 @@ void CompareWorkspace::paintCompareCanvas()
                 drawCellCompare(base, m_canvasTemporaryPane, r, QRectF(r));
             }
         }
-        else if (m_splitChk && m_splitChk->isChecked())
+        else if (d->splitChk && d->splitChk->isChecked())
             drawSplitCompare(base);
         else if (m_swipeChk && m_swipeChk->isChecked())
             drawSwipeCompare(base, int(r.width() * m_splitPos));
-        else if (m_overlayChk && m_overlayChk->isChecked())
+        else if (d->overlayChk && d->overlayChk->isChecked())
             drawOverlayCompare(base);
-        else if (m_checkerChk && m_checkerChk->isChecked())
+        else if (d->checkerChk && d->checkerChk->isChecked())
             drawCheckerboardCompare(base);
         base.end();
         m_canvasBaseKey = key;
@@ -136,7 +136,7 @@ void CompareWorkspace::drawCanvasROI(QPainter &p)
                                     cellFullDestRect(pane, canvasPaneGeometry(slot)), true,
                                     QString(QChar('A' + pane)));
     };
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         drawPane(0);
         drawPane(1);
@@ -170,7 +170,7 @@ void CompareWorkspace::drawCanvasPixelGrid(QPainter &p)
         const QRectF dest = cellFullDestRect(image, geom);
         mviewer::ui::drawPixelGrid(p, dest, 0, 0, sourceSize.width(), sourceSize.height(), geom);
     };
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         drawSlot(0);
         drawSlot(1);
@@ -202,7 +202,7 @@ void CompareWorkspace::drawCanvasInfoOverlays(QPainter &p)
             return;
         m_cellHists[pane]->paintOverlay(p, histBox);
     };
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         drawPane(0);
         drawPane(1);

@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.234] - 2026-11-27
+
+### Refactor — `compareworkspace.h` off the 800-line ceiling (no controller interfaces)
+
+Mechanical, access-boundary-preserving move; no behaviour change.
+
+- `compareworkspace_p.h` gains `CompareWorkspace::Private` holding all 99 panel
+  widget pointers (`d-><name>`, same leaf names). Two stay in the header because a
+  test friend struct reaches them (`m_swipeChk`, `m_compareCanvas`).
+- Flat passive state rather than grouped sub-structures: every compare TU keeps
+  reading the handles directly, so no callback boundary is invented around them.
+- `compareworkspace.h` goes 798 -> **728** lines.
+- Fixes `docs/ROADMAP_PUBLIC.md`, which v1.0.233 left on the previous version
+  (caught by `version_consistency`).
+
 ## [1.0.233] - 2026-11-27
 
 ### Refactor — `imageviewer.h` off the 800-line ceiling (no controller interfaces)

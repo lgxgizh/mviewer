@@ -14,12 +14,12 @@ void CompareWorkspace::toggleBlink()
 // persisted blink interval can be restored via applySession().
 void CompareWorkspace::startBlink(int intervalMs)
 {
-    if (!m_blinkTimer)
+    if (!d->blinkTimer)
     {
-        m_blinkTimer = new QTimer(this);
-        connect(m_blinkTimer, &QTimer::timeout, this, [this]() { this->toggleBlink(); });
+        d->blinkTimer = new QTimer(this);
+        connect(d->blinkTimer, &QTimer::timeout, this, [this]() { this->toggleBlink(); });
     }
-    m_blinkTimer->start(intervalMs);
+    d->blinkTimer->start(intervalMs);
     m_blinkState = false;
     applyBlink(m_blinkState);
     syncEngineBlink();
@@ -34,11 +34,11 @@ void CompareWorkspace::disarmSingleImageModes()
     // the surviving pane on alternate phases — with no way for the user to stop
     // it (the checkbox is disabled and the B shortcut refuses a disabled target).
     const bool two = m_engine.imageCount() == 2;
-    if (m_splitChk)
+    if (d->splitChk)
     {
         if (!two)
-            m_splitChk->setChecked(false);
-        m_splitChk->setEnabled(two);
+            d->splitChk->setChecked(false);
+        d->splitChk->setEnabled(two);
     }
     if (m_swipeChk)
     {
@@ -46,30 +46,30 @@ void CompareWorkspace::disarmSingleImageModes()
             m_swipeChk->setChecked(false);
         m_swipeChk->setEnabled(two);
     }
-    if (m_overlayChk)
+    if (d->overlayChk)
     {
         if (!two)
-            m_overlayChk->setChecked(false);
-        m_overlayChk->setEnabled(two);
+            d->overlayChk->setChecked(false);
+        d->overlayChk->setEnabled(two);
     }
-    if (m_checkerChk)
+    if (d->checkerChk)
     {
         if (!two)
-            m_checkerChk->setChecked(false);
-        m_checkerChk->setEnabled(two);
+            d->checkerChk->setChecked(false);
+        d->checkerChk->setEnabled(two);
     }
-    if (m_blinkChk)
+    if (d->blinkChk)
     {
         if (!two)
-            m_blinkChk->setChecked(false); // drives its toggled handler -> stopBlink()
-        m_blinkChk->setEnabled(two);
+            d->blinkChk->setChecked(false); // drives its toggled handler -> stopBlink()
+        d->blinkChk->setEnabled(two);
     }
 }
 
 void CompareWorkspace::stopBlink()
 {
-    if (m_blinkTimer)
-        m_blinkTimer->stop();
+    if (d->blinkTimer)
+        d->blinkTimer->stop();
     m_engine.clearBlink(); // M24: capture must report "blink off" after stopping
     // Restore visibility before rebuilding the normal grid. rebuildCells()
     // centrally reattaches any pane detached by two-image Blink.
@@ -120,20 +120,20 @@ void CompareWorkspace::applyBlink(bool state)
     // For exactly two images, blink looks best when the active image fills the
     // entire grid area (rather than staying in its own cell slot). We achieve
     // this by showing only the active cell and stretching it across the grid.
-    if (n == 2 && m_grid && m_layout)
+    if (n == 2 && d->grid && d->layout)
     {
         const int other = (base == 0) ? 1 : 0;
         const int activeIdx = state ? other : base;
 
         // Position both panes overlapping at (0, 0) spanning the entire grid once,
         // avoiding destructive layout churn (removeWidget / addWidget) on every single timer tick.
-        bool needsLayoutSetup = (m_layout->count() != 2);
+        bool needsLayoutSetup = (d->layout->count() != 2);
         if (!needsLayoutSetup)
         {
             int r0 = -1, c0 = -1, rs0 = -1, cs0 = -1;
             int r1 = -1, c1 = -1, rs1 = -1, cs1 = -1;
-            m_layout->getItemPosition(0, &r0, &c0, &rs0, &cs0);
-            m_layout->getItemPosition(1, &r1, &c1, &rs1, &cs1);
+            d->layout->getItemPosition(0, &r0, &c0, &rs0, &cs0);
+            d->layout->getItemPosition(1, &r1, &c1, &rs1, &cs1);
             if (r0 != 0 || c0 != 0 || r1 != 0 || c1 != 0)
                 needsLayoutSetup = true;
         }
@@ -142,14 +142,14 @@ void CompareWorkspace::applyBlink(bool state)
             // takeAt releases ownership. Delete the item only; the pane widgets
             // stay parented to the grid and are re-added below. Dropping the
             // pointer leaks the QWidgetItem allocated by relayoutGridKeepingPanes.
-            while (QLayoutItem *item = m_layout->takeAt(0))
+            while (QLayoutItem *item = d->layout->takeAt(0))
                 delete item;
             QWidget *pane0 = m_cellViews[0] ? m_cellViews[0]->parentWidget() : nullptr;
             QWidget *pane1 = m_cellViews[1] ? m_cellViews[1]->parentWidget() : nullptr;
             if (pane0)
-                m_layout->addWidget(pane0, 0, 0, -1, -1);
+                d->layout->addWidget(pane0, 0, 0, -1, -1);
             if (pane1)
-                m_layout->addWidget(pane1, 0, 0, -1, -1);
+                d->layout->addWidget(pane1, 0, 0, -1, -1);
         }
 
         for (int i = 0; i < n; ++i)
@@ -208,7 +208,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         m_compareCanvas->update();
 
     // A-4.3: draw connecting lines between linked points across cells (2-up).
-    if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty() && n >= 2)
+    if (d->pixelLinkChk && d->pixelLinkChk->isChecked() && !m_linkPoints.isEmpty() && n >= 2)
     {
         QPainter p(this);
         drawPixelLinkLines(p);
@@ -258,7 +258,7 @@ void CompareWorkspace::drawCanvasModeDivider(QPainter &p, const QRect &r)
     // exactly the pixels the CPU base surface used to put them on.
     if (!r.isValid())
         return;
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         const int x = canvasPaneGeometry(1).toRect().left();
         p.setPen(QPen(QColor(0, 0, 0, 110), 3));
@@ -383,83 +383,83 @@ void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
 {
     if (!lay)
         return;
-    m_overlayChk = new QCheckBox(mviewer::cw::compareShortcutText("O"), this);
-    m_overlayChk->setEnabled(false);
-    m_overlayChk->setToolTip(
+    d->overlayChk = new QCheckBox(mviewer::cw::compareShortcutText("O"), this);
+    d->overlayChk->setEnabled(false);
+    d->overlayChk->setToolTip(
         tr("Available only with 2 images: semi-transparent overlay comparison (shortcut: O)"));
-    connect(m_overlayChk, &QCheckBox::toggled, this,
+    connect(d->overlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
                 if (on)
-                    exclusiveMode(m_overlayChk);
+                    exclusiveMode(d->overlayChk);
                 updateCanvasModeVisibility();
-                if (m_overlayAlphaSlider)
-                    m_overlayAlphaSlider->setEnabled(on);
+                if (d->overlayAlphaSlider)
+                    d->overlayAlphaSlider->setEnabled(on);
                 syncContextualCompareControls();
             });
-    lay->addWidget(m_overlayChk);
+    lay->addWidget(d->overlayChk);
 
-    m_overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
-    m_overlayAlphaSlider->setObjectName("overlayAlphaSlider");
-    m_overlayAlphaSlider->setRange(0, 100);
-    m_overlayAlphaSlider->setValue(m_overlayAlpha);
-    m_overlayAlphaSlider->setMaximumWidth(80);
-    m_overlayAlphaSlider->setEnabled(false);
-    m_overlayAlphaSlider->setToolTip(tr("Overlay opacity (upper image)"));
-    connect(m_overlayAlphaSlider, &QSlider::valueChanged, this,
+    d->overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
+    d->overlayAlphaSlider->setObjectName("overlayAlphaSlider");
+    d->overlayAlphaSlider->setRange(0, 100);
+    d->overlayAlphaSlider->setValue(m_overlayAlpha);
+    d->overlayAlphaSlider->setMaximumWidth(80);
+    d->overlayAlphaSlider->setEnabled(false);
+    d->overlayAlphaSlider->setToolTip(tr("Overlay opacity (upper image)"));
+    connect(d->overlayAlphaSlider, &QSlider::valueChanged, this,
             [this](int v)
             {
                 m_overlayAlpha = v;
-                if (m_overlayAlphaLabel)
-                    m_overlayAlphaLabel->setText(QString("%1%").arg(v));
+                if (d->overlayAlphaLabel)
+                    d->overlayAlphaLabel->setText(QString("%1%").arg(v));
                 update();
             });
-    lay->addWidget(m_overlayAlphaSlider);
-    m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
-    m_overlayAlphaLabel->setMinimumWidth(28);
-    lay->addWidget(m_overlayAlphaLabel);
+    lay->addWidget(d->overlayAlphaSlider);
+    d->overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
+    d->overlayAlphaLabel->setMinimumWidth(28);
+    lay->addWidget(d->overlayAlphaLabel);
 }
 
 void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
 {
     if (!lay)
         return;
-    m_checkerChk = new QCheckBox(mviewer::cw::compareShortcutText("K"), this);
-    m_checkerChk->setEnabled(false);
-    m_checkerChk->setToolTip(
+    d->checkerChk = new QCheckBox(mviewer::cw::compareShortcutText("K"), this);
+    d->checkerChk->setEnabled(false);
+    d->checkerChk->setToolTip(
         tr("Checkerboard alternates two images (shortcut K); block size is adjustable"));
-    connect(m_checkerChk, &QCheckBox::toggled, this,
+    connect(d->checkerChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
                 if (on)
-                    exclusiveMode(m_checkerChk);
+                    exclusiveMode(d->checkerChk);
                 updateCanvasModeVisibility();
-                if (m_checkerSizeSlider)
-                    m_checkerSizeSlider->setEnabled(on);
+                if (d->checkerSizeSlider)
+                    d->checkerSizeSlider->setEnabled(on);
                 syncContextualCompareControls();
             });
-    lay->addWidget(m_checkerChk);
+    lay->addWidget(d->checkerChk);
 
-    m_checkerSizeSlider = new QSlider(Qt::Horizontal, this);
-    m_checkerSizeSlider->setObjectName("checkerSizeSlider");
-    m_checkerSizeSlider->setRange(16, 256);
-    m_checkerSizeSlider->setValue(m_checkerSize);
-    m_checkerSizeSlider->setFixedWidth(70);
-    m_checkerSizeSlider->setEnabled(false);
-    m_checkerSizeSlider->setToolTip(tr("Checkerboard block side length (pixels)"));
-    connect(m_checkerSizeSlider, &QSlider::valueChanged, this,
+    d->checkerSizeSlider = new QSlider(Qt::Horizontal, this);
+    d->checkerSizeSlider->setObjectName("checkerSizeSlider");
+    d->checkerSizeSlider->setRange(16, 256);
+    d->checkerSizeSlider->setValue(m_checkerSize);
+    d->checkerSizeSlider->setFixedWidth(70);
+    d->checkerSizeSlider->setEnabled(false);
+    d->checkerSizeSlider->setToolTip(tr("Checkerboard block side length (pixels)"));
+    connect(d->checkerSizeSlider, &QSlider::valueChanged, this,
             [this](int v)
             {
                 m_checkerSize = v;
-                if (m_checkerSizeLabel)
-                    m_checkerSizeLabel->setText(QString("%1px").arg(v));
-                if (m_checkerChk && m_checkerChk->isChecked() && m_compareCanvas)
+                if (d->checkerSizeLabel)
+                    d->checkerSizeLabel->setText(QString("%1px").arg(v));
+                if (d->checkerChk && d->checkerChk->isChecked() && m_compareCanvas)
                     m_compareCanvas->update();
             });
-    lay->addWidget(m_checkerSizeSlider);
-    m_checkerSizeLabel = new QLabel(QString("%1px").arg(m_checkerSize), this);
-    m_checkerSizeLabel->setMinimumWidth(34);
-    lay->addWidget(m_checkerSizeLabel);
+    lay->addWidget(d->checkerSizeSlider);
+    d->checkerSizeLabel = new QLabel(QString("%1px").arg(m_checkerSize), this);
+    d->checkerSizeLabel->setMinimumWidth(34);
+    lay->addWidget(d->checkerSizeLabel);
 }
 
 void CompareWorkspace::drawCheckerboardCompare(QPainter &p)

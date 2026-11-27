@@ -94,10 +94,10 @@ mviewer::domain::CompareSession CompareWorkspace::compareSession() const
     else
         s.syncMode = mviewer::domain::SyncMode::Off;
     s.threshold = m_thresholdValue;
-    s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
-    s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
-    s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
-    s.customColumns = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+    s.blinkIntervalMs = d->blinkTimer ? d->blinkTimer->interval() : 150;
+    s.sidePanelVisible = d->sideChk ? d->sideChk->isChecked() : false;
+    s.layoutIndex = d->layoutCombo ? d->layoutCombo->currentIndex() : 0;
+    s.customColumns = d->gridColsSpin ? d->gridColsSpin->value() : 2;
     s.uniformScale = m_uniformScale; // H5
     for (size_t i = 0; i < s.cells.size(); ++i)
         s.cells[i].localZoomMultiplier = localZoomMultiplier(static_cast<int>(i));
@@ -126,13 +126,13 @@ int CompareWorkspace::navWindow() const
 
 bool CompareWorkspace::isSplitOrSwipe() const
 {
-    return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
+    return (d->splitChk && d->splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
 }
 
 bool CompareWorkspace::anyCanvasCompareMode() const
 {
-    return isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked()) ||
-           (m_checkerChk && m_checkerChk->isChecked());
+    return isSplitOrSwipe() || (d->overlayChk && d->overlayChk->isChecked()) ||
+           (d->checkerChk && d->checkerChk->isChecked());
 }
 
 int CompareWorkspace::diffBaseIndex() const
@@ -198,9 +198,9 @@ void CompareWorkspace::updateActionAvailability()
     {
         // A failed or partial batch must not leave analysis toggles visibly
         // active after the panes they refer to have disappeared.
-        checkBox(m_diffOverlayChk, false);
-        checkBox(m_diffHighlightChk, false);
-        checkBox(m_pixelLinkChk, false);
+        checkBox(d->diffOverlayChk, false);
+        checkBox(d->diffHighlightChk, false);
+        checkBox(d->pixelLinkChk, false);
         m_linkPoints.clear();
         refreshLinkMarkers();
         updateLinkInfo();
@@ -209,24 +209,24 @@ void CompareWorkspace::updateActionAvailability()
     // These controls operate on the rendered comparison, not on a pending
     // request. Keeping one gate here prevents a stale successful pair from
     // making the new loading/empty state look interactive.
-    const bool overlayOn = hasPair && m_overlayChk && m_overlayChk->isChecked();
+    const bool overlayOn = hasPair && d->overlayChk && d->overlayChk->isChecked();
     const bool linksOn =
-        hasPair && m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty();
-    enableWidget(m_blinkChk, hasPair);
-    enableWidget(m_splitChk, hasPair);
+        hasPair && d->pixelLinkChk && d->pixelLinkChk->isChecked() && !m_linkPoints.isEmpty();
+    enableWidget(d->blinkChk, hasPair);
+    enableWidget(d->splitChk, hasPair);
     enableWidget(m_swipeChk, hasPair);
-    enableWidget(m_overlayChk, hasPair);
-    enableWidget(m_checkerChk, hasPair);
-    enableWidget(m_overlayAlphaSlider, overlayOn);
+    enableWidget(d->overlayChk, hasPair);
+    enableWidget(d->checkerChk, hasPair);
+    enableWidget(d->overlayAlphaSlider, overlayOn);
     // Threshold / gain stay gated by syncContextualCompareControls (diff overlay on).
-    enableWidget(m_diffOverlayChk, hasSet);
-    enableWidget(m_diffHighlightChk, hasSet);
-    enableWidget(m_pixelLinkChk, hasPair);
-    enableWidget(m_clearLinksBtn, linksOn);
-    enableWidget(m_analyzeBtn, hasImage);
-    enableWidget(m_exportReportBtn, hasSet);
-    enableWidget(m_swapBtn, hasSet);
-    enableWidget(m_autoAlignChk, hasSet);
+    enableWidget(d->diffOverlayChk, hasSet);
+    enableWidget(d->diffHighlightChk, hasSet);
+    enableWidget(d->pixelLinkChk, hasPair);
+    enableWidget(d->clearLinksBtn, linksOn);
+    enableWidget(d->analyzeBtn, hasImage);
+    enableWidget(d->exportReportBtn, hasSet);
+    enableWidget(d->swapBtn, hasSet);
+    enableWidget(d->autoAlignChk, hasSet);
     refreshCompareControlTooltips();
     syncContextualCompareControls();
 }
@@ -234,26 +234,26 @@ void CompareWorkspace::updateActionAvailability()
 CompareWorkspace::NavState CompareWorkspace::captureNavState() const
 {
     NavState s;
-    s.blink = m_blinkChk && m_blinkChk->isChecked();
-    s.split = m_splitChk && m_splitChk->isChecked();
+    s.blink = d->blinkChk && d->blinkChk->isChecked();
+    s.split = d->splitChk && d->splitChk->isChecked();
     s.swipe = m_swipeChk && m_swipeChk->isChecked();
-    s.overlay = m_overlayChk && m_overlayChk->isChecked();
-    s.checker = m_checkerChk && m_checkerChk->isChecked(); // M23
+    s.overlay = d->overlayChk && d->overlayChk->isChecked();
+    s.checker = d->checkerChk && d->checkerChk->isChecked(); // M23
     s.checkerSize = m_checkerSize;                         // M23
-    s.diffHighlight = m_diffHighlightChk && m_diffHighlightChk->isChecked();
+    s.diffHighlight = d->diffHighlightChk && d->diffHighlightChk->isChecked();
     s.diffOverlay = m_diffOverlayVisible;
     s.diffOverlayPromoted = m_diffOverlayPromoted;
-    s.diffGainIndex = m_diffGainCombo ? m_diffGainCombo->currentIndex() : 0;
-    s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
-    s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
+    s.diffGainIndex = d->diffGainCombo ? d->diffGainCombo->currentIndex() : 0;
+    s.syncZoom = d->syncZoomChk ? d->syncZoomChk->isChecked() : true;
+    s.syncDrag = d->syncDragChk ? d->syncDragChk->isChecked() : true;
     s.syncRotate = m_syncRotate;
-    s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
-    s.pixelLink = m_pixelLinkChk && m_pixelLinkChk->isChecked();
+    s.crosshair = d->crosshairChk && d->crosshairChk->isChecked();
+    s.pixelLink = d->pixelLinkChk && d->pixelLinkChk->isChecked();
     s.filenameOverlay = m_filenameOverlay;
     s.overlayMode = static_cast<int>(m_displayOverlay);
     s.overlayAlpha = m_overlayAlpha;
     s.threshold = m_thresholdValue;
-    s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+    s.layoutIndex = d->layoutCombo ? d->layoutCombo->currentIndex() : 0;
     s.roi = m_lastSelection;
     s.hasRoi = m_roiLinked && m_lastSelection.width > 0 && m_lastSelection.height > 0;
     return s;
@@ -261,18 +261,18 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
 
 void CompareWorkspace::restoreNavState(const NavState &s)
 {
-    if (m_syncZoomChk)
-        m_syncZoomChk->setChecked(s.syncZoom);
-    if (m_syncDragChk)
-        m_syncDragChk->setChecked(s.syncDrag);
+    if (d->syncZoomChk)
+        d->syncZoomChk->setChecked(s.syncZoom);
+    if (d->syncDragChk)
+        d->syncDragChk->setChecked(s.syncDrag);
     setSyncRotate(s.syncRotate);
-    if (m_crosshairChk)
-        m_crosshairChk->setChecked(s.crosshair);
-    if (m_pixelLinkChk)
-        m_pixelLinkChk->setChecked(s.pixelLink);
+    if (d->crosshairChk)
+        d->crosshairChk->setChecked(s.crosshair);
+    if (d->pixelLinkChk)
+        d->pixelLinkChk->setChecked(s.pixelLink);
     m_filenameOverlay = s.filenameOverlay;
-    if (m_filenameOverlayChk)
-        m_filenameOverlayChk->setChecked(s.filenameOverlay);
+    if (d->filenameOverlayChk)
+        d->filenameOverlayChk->setChecked(s.filenameOverlay);
     applyFilenameOverlays();
     setOverlayMode(static_cast<mviewer::OverlayMode>(s.overlayMode));
     // Restore heatmap + highlight without going through the promote/demote
@@ -281,50 +281,50 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     m_diffOverlayPromoted = s.diffOverlayPromoted;
     m_diffOverlayVisible = s.diffOverlay;
     m_diffHighlight = s.diffHighlight;
-    if (m_diffOverlayChk)
+    if (d->diffOverlayChk)
     {
-        const QSignalBlocker blocker(m_diffOverlayChk);
-        m_diffOverlayChk->setChecked(s.diffOverlay);
+        const QSignalBlocker blocker(d->diffOverlayChk);
+        d->diffOverlayChk->setChecked(s.diffOverlay);
     }
-    if (m_diffHighlightChk)
+    if (d->diffHighlightChk)
     {
-        const QSignalBlocker blocker(m_diffHighlightChk);
-        m_diffHighlightChk->setChecked(s.diffHighlight);
+        const QSignalBlocker blocker(d->diffHighlightChk);
+        d->diffHighlightChk->setChecked(s.diffHighlight);
     }
-    if (m_diffGainCombo && s.diffGainIndex >= 0 && s.diffGainIndex < m_diffGainCombo->count())
-        m_diffGainCombo->setCurrentIndex(s.diffGainIndex);
+    if (d->diffGainCombo && s.diffGainIndex >= 0 && s.diffGainIndex < d->diffGainCombo->count())
+        d->diffGainCombo->setCurrentIndex(s.diffGainIndex);
     refreshAllDiffOverlays();
     m_overlayAlpha = s.overlayAlpha;
-    if (m_overlayAlphaSlider)
-        m_overlayAlphaSlider->setValue(s.overlayAlpha);
+    if (d->overlayAlphaSlider)
+        d->overlayAlphaSlider->setValue(s.overlayAlpha);
     m_thresholdValue = s.threshold;
-    if (m_thresholdSlider)
-        m_thresholdSlider->setValue(s.threshold);
-    if (m_layoutCombo && s.layoutIndex >= 0 && s.layoutIndex < m_layoutCombo->count())
-        m_layoutCombo->setCurrentIndex(s.layoutIndex);
+    if (d->thresholdSlider)
+        d->thresholdSlider->setValue(s.threshold);
+    if (d->layoutCombo && s.layoutIndex >= 0 && s.layoutIndex < d->layoutCombo->count())
+        d->layoutCombo->setCurrentIndex(s.layoutIndex);
     // Exclusive modes — only restore if still meaningful for image count.
     // Apply at most one of Split/Swipe/Overlay/Checker (priority order below)
     // so the toggled handlers do not thrash each other during restore.
     const int n = m_engine.imageCount();
-    if (m_blinkChk)
-        m_blinkChk->setChecked(s.blink && n >= 2);
+    if (d->blinkChk)
+        d->blinkChk->setChecked(s.blink && n >= 2);
     m_checkerSize = s.checkerSize; // M23
-    if (m_checkerSizeSlider)
-        m_checkerSizeSlider->setValue(s.checkerSize);
+    if (d->checkerSizeSlider)
+        d->checkerSizeSlider->setValue(s.checkerSize);
     if (n == 2)
     {
         const bool wantSplit = s.split;
         const bool wantSwipe = s.swipe && !wantSplit;
         const bool wantOverlay = s.overlay && !wantSplit && !wantSwipe;
         const bool wantChecker = s.checker && !wantSplit && !wantSwipe && !wantOverlay; // M23
-        if (m_splitChk)
-            m_splitChk->setChecked(wantSplit);
+        if (d->splitChk)
+            d->splitChk->setChecked(wantSplit);
         if (m_swipeChk)
             m_swipeChk->setChecked(wantSwipe);
-        if (m_overlayChk)
-            m_overlayChk->setChecked(wantOverlay);
-        if (m_checkerChk)
-            m_checkerChk->setChecked(wantChecker);
+        if (d->overlayChk)
+            d->overlayChk->setChecked(wantOverlay);
+        if (d->checkerChk)
+            d->checkerChk->setChecked(wantChecker);
     }
     if (s.hasRoi)
         applySelectionToAll(s.roi);
@@ -385,12 +385,12 @@ void CompareWorkspace::applyLayoutPreset(int n)
     // preset grid; avoid a redundant rebuildCells on the still-old frames.
     const int cols = CompareLayout::forCount(n).cols;
     m_engine.setColumns(cols);
-    if (m_layoutCombo)
+    if (d->layoutCombo)
     {
         // Combo indices: Single=1, 2 columns=2, 3 columns=3, 4 columns=4.
-        const QSignalBlocker block(m_layoutCombo);
-        if (cols < m_layoutCombo->count())
-            m_layoutCombo->setCurrentIndex(cols);
+        const QSignalBlocker block(d->layoutCombo);
+        if (cols < d->layoutCombo->count())
+            d->layoutCombo->setCurrentIndex(cols);
     }
     const NavState saved = captureNavState();
     setImages(win);
@@ -417,10 +417,10 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     m_syncDrag = s.syncMode == mviewer::domain::SyncMode::Drag ||
                  s.syncMode == mviewer::domain::SyncMode::All;
     {
-        const QSignalBlocker zoomBlocker(m_syncZoomChk);
-        const QSignalBlocker dragBlocker(m_syncDragChk);
-        m_syncZoomChk->setChecked(m_syncZoom);
-        m_syncDragChk->setChecked(m_syncDrag);
+        const QSignalBlocker zoomBlocker(d->syncZoomChk);
+        const QSignalBlocker dragBlocker(d->syncDragChk);
+        d->syncZoomChk->setChecked(m_syncZoom);
+        d->syncDragChk->setChecked(m_syncDrag);
     }
     m_engine.setSyncMode(m_syncZoom, m_syncDrag);
 
@@ -448,12 +448,12 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     // contributes exactly one logical refresh.
     m_thresholdValue = s.threshold;
     applySessionToComponents(m_sessionState.get(), m_diffRenderer.get(), s);
-    if (m_thresholdSlider)
+    if (d->thresholdSlider)
     {
-        const QSignalBlocker blocker(m_thresholdSlider);
-        m_thresholdSlider->setValue(static_cast<int>(s.threshold));
-        if (m_thresholdLabel)
-            m_thresholdLabel->setText(QString::number(static_cast<int>(s.threshold)));
+        const QSignalBlocker blocker(d->thresholdSlider);
+        d->thresholdSlider->setValue(static_cast<int>(s.threshold));
+        if (d->thresholdLabel)
+            d->thresholdLabel->setText(QString::number(static_cast<int>(s.threshold)));
     }
 
     // ROI / selection (synchronized across cells). Applying the selection
@@ -476,29 +476,29 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
 
     // Layout combo (0=auto,1=single-col,2=2col,3=3col,4=4col,5=one-row). Setting
     // the index triggers onLayoutChanged which drives the engine's column count.
-    if (m_gridColsSpin && s.customColumns >= 1 && s.customColumns <= 8)
+    if (d->gridColsSpin && s.customColumns >= 1 && s.customColumns <= 8)
     {
-        const QSignalBlocker blocker(m_gridColsSpin);
-        m_gridColsSpin->setValue(s.customColumns);
+        const QSignalBlocker blocker(d->gridColsSpin);
+        d->gridColsSpin->setValue(s.customColumns);
     }
-    if (m_layoutCombo && m_layoutCombo->currentIndex() != s.layoutIndex)
-        m_layoutCombo->setCurrentIndex(s.layoutIndex);
+    if (d->layoutCombo && d->layoutCombo->currentIndex() != s.layoutIndex)
+        d->layoutCombo->setCurrentIndex(s.layoutIndex);
 
     // Side (inspector + histogram) panel visibility.
-    if (m_sideChk && m_sideChk->isChecked() != s.sidePanelVisible)
-        m_sideChk->setChecked(s.sidePanelVisible);
+    if (d->sideChk && d->sideChk->isChecked() != s.sidePanelVisible)
+        d->sideChk->setChecked(s.sidePanelVisible);
 
     // H5: "Uniform Pixel Scale" — restore the shared-zoom alignment flag and checkbox.
     m_uniformScale = s.uniformScale;
-    if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != s.uniformScale)
-        m_uniformScaleChk->setChecked(s.uniformScale);
+    if (d->uniformScaleChk && d->uniformScaleChk->isChecked() != s.uniformScale)
+        d->uniformScaleChk->setChecked(s.uniformScale);
 
     // Blink compare: restore interval + on/off state.
-    if (m_blinkChk)
+    if (d->blinkChk)
     {
         const bool wantBlink = s.isBlinking();
-        if (m_blinkChk->isChecked() != wantBlink)
-            m_blinkChk->setChecked(wantBlink);
+        if (d->blinkChk->isChecked() != wantBlink)
+            d->blinkChk->setChecked(wantBlink);
         if (wantBlink)
             startBlink(s.blinkIntervalMs > 0 ? s.blinkIntervalMs : 500);
         else
@@ -554,15 +554,15 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
                 m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
         }
-        if (m_roiGeometryLabel)
-            m_roiGeometryLabel->setText(m_lastSelection.isEmpty()
+        if (d->roiGeometryLabel)
+            d->roiGeometryLabel->setText(m_lastSelection.isEmpty()
                                             ? tr("ROI: —")
                                             : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
                                                   .arg(m_lastSelection.x)
                                                   .arg(m_lastSelection.y)
                                                   .arg(m_lastSelection.width)
                                                   .arg(m_lastSelection.height));
-        if (m_roiHistChk && m_roiHistChk->isChecked())
+        if (d->roiHistChk && d->roiHistChk->isChecked())
             refreshHistograms();
         scheduleROIMeasurement();
         update();
@@ -602,7 +602,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     }
     // M23: ROI + Histogram linkage — histogram surfaces keep their ROI scope
     // even when the analysis side panel is collapsed.
-    if (m_roiHistChk && m_roiHistChk->isChecked())
+    if (d->roiHistChk && d->roiHistChk->isChecked())
         refreshHistograms();
 
     // The ROI feeds the diff overlays + metrics on the async batch path. Skip
@@ -611,8 +611,8 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     if (!m_rebuildingCells)
         refreshAllDiffOverlays();
     scheduleROIMeasurement();
-    if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+    if (d->roiGeometryLabel)
+        d->roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
                                                       .arg(m_lastSelection.x)
                                                       .arg(m_lastSelection.y)
                                                       .arg(m_lastSelection.width)
@@ -638,8 +638,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                               sel.y + sel.height, w, h);
         view->setSelection(norm);
         m_lastSelection = norm;
-        if (m_roiGeometryLabel)
-            m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+        if (d->roiGeometryLabel)
+            d->roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
                                                        : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
                                                              .arg(norm.x)
                                                              .arg(norm.y)
@@ -665,8 +665,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
         other->setSelection(m_lastSelection);
     }
     clearROIStatsDisplay();
-    if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+    if (d->roiGeometryLabel)
+        d->roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
                                                       .arg(m_lastSelection.x)
                                                       .arg(m_lastSelection.y)
                                                       .arg(m_lastSelection.width)
@@ -704,14 +704,14 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     }
     if (m_sessionState)
         m_sessionState->setCurrentROI(m_lastSelection);
-    if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+    if (d->roiGeometryLabel)
+        d->roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
                                                    : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
                                                          .arg(norm.x)
                                                          .arg(norm.y)
                                                          .arg(norm.width)
                                                          .arg(norm.height));
-    if (m_roiHistChk && m_roiHistChk->isChecked())
+    if (d->roiHistChk && d->roiHistChk->isChecked())
         refreshHistograms();
     scheduleROIMeasurement();
     update();
@@ -739,9 +739,9 @@ void CompareWorkspace::clearROI()
     clearROIStatsDisplay();
     // The geometry readout is written only by the applySelection* paths, so
     // clearing the ROI used to leave "X/Y/W/H" of a box that no longer exists.
-    if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(tr("ROI: —"));
-    if (m_roiHistChk && m_roiHistChk->isChecked())
+    if (d->roiGeometryLabel)
+        d->roiGeometryLabel->setText(tr("ROI: —"));
+    if (d->roiHistChk && d->roiHistChk->isChecked())
         refreshHistograms();
     refreshAllDiffOverlays();
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);

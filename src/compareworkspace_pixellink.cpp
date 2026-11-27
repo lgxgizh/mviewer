@@ -14,8 +14,8 @@
 
 void CompareWorkspace::onPixelLinkToggled(bool on)
 {
-    if (m_clearLinksBtn)
-        m_clearLinksBtn->setEnabled(on && !m_linkPoints.isEmpty());
+    if (d->clearLinksBtn)
+        d->clearLinksBtn->setEnabled(on && !m_linkPoints.isEmpty());
     if (!on)
     {
         // Keep markers stored but hide them when mode is off.
@@ -41,8 +41,8 @@ void CompareWorkspace::addLinkPoint(const QPointF &imgPt)
     m_linkPoints.push_back(imgPt);
     refreshLinkMarkers();
     updateLinkInfo();
-    if (m_clearLinksBtn)
-        m_clearLinksBtn->setEnabled(m_pixelLinkChk && m_pixelLinkChk->isChecked());
+    if (d->clearLinksBtn)
+        d->clearLinksBtn->setEnabled(d->pixelLinkChk && d->pixelLinkChk->isChecked());
     update();
 }
 
@@ -51,8 +51,8 @@ void CompareWorkspace::clearLinkPoints()
     m_linkPoints.clear();
     refreshLinkMarkers();
     updateLinkInfo();
-    if (m_clearLinksBtn)
-        m_clearLinksBtn->setEnabled(false);
+    if (d->clearLinksBtn)
+        d->clearLinksBtn->setEnabled(false);
     update();
 }
 
@@ -62,7 +62,7 @@ void CompareWorkspace::refreshLinkMarkers()
     {
         if (!v)
             continue;
-        if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty())
+        if (d->pixelLinkChk && d->pixelLinkChk->isChecked() && !m_linkPoints.isEmpty())
             v->setLinkMarkers(m_linkPoints);
         else
             v->clearLinkMarkers();
@@ -71,12 +71,12 @@ void CompareWorkspace::refreshLinkMarkers()
 
 void CompareWorkspace::updateLinkInfo()
 {
-    if (!m_linkInfoLabel)
+    if (!d->linkInfoLabel)
         return;
     if (m_linkPoints.isEmpty())
     {
-        m_linkInfoLabel->setText(tr("Markers: 0"));
-        m_linkInfoLabel->setToolTip(QString());
+        d->linkInfoLabel->setText(tr("Markers: 0"));
+        d->linkInfoLabel->setToolTip(QString());
         return;
     }
 
@@ -155,8 +155,8 @@ void CompareWorkspace::updateLinkInfo()
         }
         lines << line;
     }
-    m_linkInfoLabel->setText(tr("Markers: %1").arg(m_linkPoints.size()));
-    m_linkInfoLabel->setToolTip(lines.join('\n'));
+    d->linkInfoLabel->setText(tr("Markers: %1").arg(m_linkPoints.size()));
+    d->linkInfoLabel->setToolTip(lines.join('\n'));
     const auto &last = m_linkPoints.last();
     emit pixelInfo(tr("Pixel Link #%1 @ (%2,%3) — hover \"Markers\" to view all RGB/Δ")
                        .arg(m_linkPoints.size())
@@ -170,7 +170,7 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
     // when both cells are visible in the grid (not split/swipe/overlay modes).
     if (m_cellViews.size() < 2 || !m_cellViews[0] || !m_cellViews[1])
         return;
-    if (isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked()))
+    if (isSplitOrSwipe() || (d->overlayChk && d->overlayChk->isChecked()))
         return;
 
     auto mapToWorkspace = [this](RawImageView *view, const QPointF &imgPt) -> QPointF

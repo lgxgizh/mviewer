@@ -8,25 +8,25 @@ void CompareWorkspace::setOverlayMode(mviewer::OverlayMode mode)
 {
     if (m_displayOverlay == mode)
     {
-        if (m_channelCombo)
+        if (d->channelCombo)
         {
-            const int index = m_channelCombo->findData(static_cast<int>(mode));
-            if (index >= 0 && m_channelCombo->currentIndex() != index)
+            const int index = d->channelCombo->findData(static_cast<int>(mode));
+            if (index >= 0 && d->channelCombo->currentIndex() != index)
             {
-                const QSignalBlocker blocker(m_channelCombo);
-                m_channelCombo->setCurrentIndex(index);
+                const QSignalBlocker blocker(d->channelCombo);
+                d->channelCombo->setCurrentIndex(index);
             }
         }
         return;
     }
     m_displayOverlay = mode;
-    if (m_channelCombo)
+    if (d->channelCombo)
     {
-        const int index = m_channelCombo->findData(static_cast<int>(mode));
+        const int index = d->channelCombo->findData(static_cast<int>(mode));
         if (index >= 0)
         {
-            const QSignalBlocker blocker(m_channelCombo);
-            m_channelCombo->setCurrentIndex(index);
+            const QSignalBlocker blocker(d->channelCombo);
+            d->channelCombo->setCurrentIndex(index);
         }
     }
     applyDisplayOverlayToViews();
@@ -53,10 +53,10 @@ void CompareWorkspace::setPixelGridEnabled(bool on)
     if (m_pixelGridEnabled == on)
         return;
     m_pixelGridEnabled = on;
-    if (m_pixelGridChk && m_pixelGridChk->isChecked() != on)
+    if (d->pixelGridChk && d->pixelGridChk->isChecked() != on)
     {
-        const QSignalBlocker b(m_pixelGridChk);
-        m_pixelGridChk->setChecked(on);
+        const QSignalBlocker b(d->pixelGridChk);
+        d->pixelGridChk->setChecked(on);
     }
     for (RawImageView *view : m_cellViews)
     {

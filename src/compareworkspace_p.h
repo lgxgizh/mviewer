@@ -73,3 +73,115 @@
 
 // RGB materialization under Qt's ~256 MB limit (see setImages probe).
 constexpr qint64 kCompareAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP
+
+// Passive UI state bundle (pimpl-style `d`).
+//
+// Every panel widget pointer used by the implementation. They are plain
+// handles owned by CompareWorkspace; keeping them here keeps
+// compareworkspace.h far below its line ceiling and lets the header drop
+// the QWidget-heavy declarations from its private section.
+//
+// Deliberately NOT an object-oriented controller: the paint/UI TUs read these
+// fields directly, so no callback boundary is introduced around them.
+struct CompareWorkspace::Private
+{
+    QCheckBox *syncZoomChk = nullptr;
+    QCheckBox *syncDragChk = nullptr;
+    QCheckBox *syncRotateChk = nullptr;
+    QCheckBox *syncRotatePanelChk = nullptr;
+    QCheckBox *uniformScaleChk = nullptr;
+    QWidget *grid = nullptr;
+    QGridLayout *layout = nullptr;
+    QWidget *compareGridPage = nullptr;
+    QWidget *compareLoadingPage = nullptr;
+    QLabel *compareLoadingLabel = nullptr;
+    QProgressBar *compareLoadingProgress = nullptr;
+    QStackedLayout *pageStack = nullptr;
+    QCheckBox *blinkChk = nullptr;
+    QTimer *blinkTimer = nullptr;
+    QPushButton *temporaryCompareButton = nullptr;
+    QCheckBox *splitChk = nullptr;
+    QCheckBox *overlayChk = nullptr;
+    QSlider *overlayAlphaSlider = nullptr;
+    QLabel *overlayAlphaLabel = nullptr;
+    QCheckBox *checkerChk = nullptr;
+    QSlider *checkerSizeSlider = nullptr;
+    QLabel *checkerSizeLabel = nullptr;
+    QCheckBox *pixelLinkChk = nullptr;
+    QPushButton *clearLinksBtn = nullptr;
+    QLabel *linkInfoLabel = nullptr;
+    QCheckBox *diffHighlightChk = nullptr;
+    QCheckBox *diffOverlayChk = nullptr;
+    QComboBox *diffGainCombo = nullptr;
+    QSpinBox *gridColsSpin = nullptr;
+    QLabel *layoutStatusLabel = nullptr;
+    QSlider *thresholdSlider = nullptr;
+    QLabel *thresholdLabel = nullptr;
+    QPushButton *autoThresholdBtn = nullptr;
+    QComboBox *layoutCombo = nullptr;
+    QComboBox *channelCombo = nullptr;
+    QCheckBox *sideChk = nullptr;
+    QWidget *sidePanel = nullptr;
+    QTableWidget *inspector = nullptr;
+    QComboBox *csCombo = nullptr;
+    QComboBox *kernelCombo = nullptr;
+    QLabel *coordLabel = nullptr;
+    QLabel *statsLabel = nullptr;
+    QLabel *histTitle = nullptr;
+    QCheckBox *histRChk = nullptr;
+    QCheckBox *histGChk = nullptr;
+    QCheckBox *histBChk = nullptr;
+    QCheckBox *histLumaChk = nullptr;
+    QCheckBox *histVChk = nullptr;
+    QCheckBox *histLogChk = nullptr;
+    QCheckBox *roiHistChk = nullptr;
+    QLabel *roiStatusLabel = nullptr;
+    QLabel *roiGeometryLabel = nullptr;
+    QLabel *roiDeltaLabel = nullptr;
+    QTableWidget *roiTable = nullptr;
+    QPushButton *clearRoiBtn = nullptr;
+    QPushButton *copyRoiBtn = nullptr;
+    QPushButton *roiHud = nullptr;
+    QCheckBox *crosshairChk = nullptr;
+    QPushButton *focusBtn = nullptr;
+    QLabel *focusLabel = nullptr;
+    QLabel *frameLabel = nullptr;
+    QSpinBox *frameSpin = nullptr;
+    QWidget *editPanel = nullptr;
+    QLabel *editLabel = nullptr;
+    QSlider *brightSlider = nullptr;
+    QSlider *contrastSlider = nullptr;
+    QSlider *gammaSlider = nullptr;
+    QSlider *rGainSlider = nullptr;
+    QSlider *bGainSlider = nullptr;
+    QLabel *brightVal = nullptr;
+    QLabel *contrastVal = nullptr;
+    QLabel *gammaVal = nullptr;
+    QLabel *rGainVal = nullptr;
+    QLabel *bGainVal = nullptr;
+    QLabel *rotVal = nullptr;
+    QPushButton *resetAdjBtn = nullptr;
+    QCheckBox *usmChk = nullptr;
+    QCheckBox *usmLumaChk = nullptr;
+    QSlider *usmAmountSlider = nullptr;
+    QSlider *usmRadiusSlider = nullptr;
+    QSlider *usmThresholdSlider = nullptr;
+    QLabel *usmAmountVal = nullptr;
+    QLabel *usmRadiusVal = nullptr;
+    QLabel *usmThresholdVal = nullptr;
+    QPushButton *exportAdjustedBtn = nullptr;
+    QLabel *metricLabel = nullptr;
+    QCheckBox *paneHistOverlayChk = nullptr;
+    QCheckBox *filenameOverlayChk = nullptr;
+    QCheckBox *pixelGridChk = nullptr;
+    QCheckBox *perPaneHistChk = nullptr;
+    QPushButton *savePresetBtn = nullptr;
+    QPushButton *loadPresetBtn = nullptr;
+    QPushButton *swapBtn = nullptr;
+    QPushButton *analyzeBtn = nullptr;
+    QPushButton *exportReportBtn = nullptr;
+    QPushButton *exitBtn = nullptr;
+    QCheckBox *autoAlignChk = nullptr;
+    QLabel *compareStatusLabel = nullptr;
+    QDialog *shortcutHelpDialog = nullptr;
+};

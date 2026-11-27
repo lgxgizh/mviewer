@@ -61,12 +61,12 @@ QDialog *createCompareShortcutHelp(QWidget *parent)
 
 void CompareWorkspace::showShortcutHelp()
 {
-    if (!m_shortcutHelpDialog)
-        m_shortcutHelpDialog = createCompareShortcutHelp(this);
-    const bool open = !m_shortcutHelpDialog->isVisible();
-    m_shortcutHelpDialog->setVisible(open);
+    if (!d->shortcutHelpDialog)
+        d->shortcutHelpDialog = createCompareShortcutHelp(this);
+    const bool open = !d->shortcutHelpDialog->isVisible();
+    d->shortcutHelpDialog->setVisible(open);
     if (open)
-        m_shortcutHelpDialog->raise();
+        d->shortcutHelpDialog->raise();
     // Selection guidance stays on the status label; the dialog is the full table.
     // Compare pairs are chosen in Browse, so there is no in-Compare pair stepping.
     const QString tip = tr("Ctrl+Shift+A deselects. Ctrl+Alt+A exports batch analysis.");

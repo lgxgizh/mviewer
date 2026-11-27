@@ -57,11 +57,11 @@ void CompareWorkspace::closeCompareHost()
 
 void CompareWorkspace::showCompareStatus(const QString &text, int msec)
 {
-    if (!m_compareStatusLabel)
+    if (!d->compareStatusLabel)
         return;
-    m_compareStatusLabel->setText(text);
-    QTimer::singleShot(msec, m_compareStatusLabel,
-                       [label = QPointer<QLabel>(m_compareStatusLabel), text]()
+    d->compareStatusLabel->setText(text);
+    QTimer::singleShot(msec, d->compareStatusLabel,
+                       [label = QPointer<QLabel>(d->compareStatusLabel), text]()
                        {
                            if (label && label->text() == text)
                                label->clear();
@@ -266,11 +266,11 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
     switch (key)
     {
     case Qt::Key_B:
-        target = m_blinkChk;
+        target = d->blinkChk;
         modeName = compareModeStatus("B");
         break;
     case Qt::Key_S:
-        target = m_splitChk;
+        target = d->splitChk;
         modeName = compareModeStatus("S");
         break;
     case Qt::Key_W:
@@ -278,15 +278,15 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
         modeName = compareModeStatus("W");
         break;
     case Qt::Key_O:
-        target = m_overlayChk;
+        target = d->overlayChk;
         modeName = compareModeStatus("O");
         break;
     case Qt::Key_K:
-        target = m_checkerChk;
+        target = d->checkerChk;
         modeName = compareModeStatus("K");
         break;
     case Qt::Key_H:
-        target = m_diffHighlightChk;
+        target = d->diffHighlightChk;
         modeName = compareModeStatus("H");
         break;
     default:
@@ -329,47 +329,47 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (handleTransformCompareKey(event))
         return true;
     // Sync toggles.
-    if (plain && key == Qt::Key_Z && m_syncZoomChk)
+    if (plain && key == Qt::Key_Z && d->syncZoomChk)
     {
-        m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
-        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(),
+        d->syncZoomChk->setChecked(!d->syncZoomChk->isChecked());
+        showCompareStatus(compareToggleStatus("Z", d->syncZoomChk->isChecked(),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
-    if (plain && key == Qt::Key_D && m_syncDragChk)
+    if (plain && key == Qt::Key_D && d->syncDragChk)
     {
-        m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
-        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(),
+        d->syncDragChk->setChecked(!d->syncDragChk->isChecked());
+        showCompareStatus(compareToggleStatus("D", d->syncDragChk->isChecked(),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
     // Crosshair / Pixel Link / Side panel.
-    if (plain && key == Qt::Key_R && m_crosshairChk)
+    if (plain && key == Qt::Key_R && d->crosshairChk)
     {
-        m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(),
+        d->crosshairChk->setChecked(!d->crosshairChk->isChecked());
+        showCompareStatus(compareToggleStatus("R", d->crosshairChk->isChecked(),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
-    if (plain && key == Qt::Key_L && m_pixelLinkChk)
+    if (plain && key == Qt::Key_L && d->pixelLinkChk)
     {
-        m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(),
+        d->pixelLinkChk->setChecked(!d->pixelLinkChk->isChecked());
+        showCompareStatus(compareToggleStatus("L", d->pixelLinkChk->isChecked(),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
-    if (plain && key == Qt::Key_I && m_sideChk)
+    if (plain && key == Qt::Key_I && d->sideChk)
     {
-        m_sideChk->setChecked(!m_sideChk->isChecked());
-        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(),
+        d->sideChk->setChecked(!d->sideChk->isChecked());
+        showCompareStatus(compareToggleStatus("I", d->sideChk->isChecked(),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Shown"),
                                               QT_TRANSLATE_NOOP("CompareWorkspace", "Hidden")));
         event->accept();
@@ -448,18 +448,18 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         return true;
 
     // Diff threshold ± ( [ / ] ).
-    if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
+    if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && d->thresholdSlider)
     {
         const int step = (key == Qt::Key_BracketRight) ? 5 : -5;
-        m_thresholdSlider->setValue(qBound(0, m_thresholdSlider->value() + step, 255));
+        d->thresholdSlider->setValue(qBound(0, d->thresholdSlider->value() + step, 255));
         event->accept();
         return true;
     }
     // Overlay alpha ± ( , / . ).
-    if (plain && (key == Qt::Key_Comma || key == Qt::Key_Period) && m_overlayAlphaSlider)
+    if (plain && (key == Qt::Key_Comma || key == Qt::Key_Period) && d->overlayAlphaSlider)
     {
         const int step = (key == Qt::Key_Period) ? 5 : -5;
-        m_overlayAlphaSlider->setValue(qBound(0, m_overlayAlphaSlider->value() + step, 100));
+        d->overlayAlphaSlider->setValue(qBound(0, d->overlayAlphaSlider->value() + step, 100));
         event->accept();
         return true;
     }
@@ -606,8 +606,8 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
             m_explicitEditIdx = targetIdx;
             displayRot = m_cellAdjusts[static_cast<size_t>(targetIdx)].rotation;
         }
-        if (m_rotVal)
-            m_rotVal->setText(QString::number(displayRot) + "°");
+        if (d->rotVal)
+            d->rotVal->setText(QString::number(displayRot) + "°");
 
         scheduleDisplayMaterialization(dirty);
         onAdjEditFinished();
@@ -633,8 +633,8 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
     m_cellAdjusts[static_cast<size_t>(idx)].rotation = rot;
     m_editIdx = idx;
     m_explicitEditIdx = idx;
-    if (m_rotVal)
-        m_rotVal->setText(QString::number(rot) + "°");
+    if (d->rotVal)
+        d->rotVal->setText(QString::number(rot) + "°");
     applyAdjToCell(idx);
     onAdjEditFinished();
     update();

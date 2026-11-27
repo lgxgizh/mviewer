@@ -158,66 +158,66 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     // ── Pixel Inspector Pro ──────────────────────────────────────────────
     auto *inspHeader = new QHBoxLayout();
     inspHeader->addWidget(new QLabel(tr("Pixel Inspector"), this));
-    m_coordLabel = new QLabel(QStringLiteral("(—, —)"), this);
-    m_coordLabel->setObjectName("pixelInspectorCoordLabel");
-    m_coordLabel->setStyleSheet(
+    d->coordLabel = new QLabel(QStringLiteral("(—, —)"), this);
+    d->coordLabel->setObjectName("pixelInspectorCoordLabel");
+    d->coordLabel->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
-    inspHeader->addWidget(m_coordLabel);
+    inspHeader->addWidget(d->coordLabel);
     inspHeader->addStretch(1);
 
-    m_csCombo = new QComboBox(this);
-    m_csCombo->setObjectName("pixelInspectorColorSpaceCombo");
-    m_csCombo->addItems({QStringLiteral("RGB"), QStringLiteral("HEX"), QStringLiteral("HSV"),
+    d->csCombo = new QComboBox(this);
+    d->csCombo->setObjectName("pixelInspectorColorSpaceCombo");
+    d->csCombo->addItems({QStringLiteral("RGB"), QStringLiteral("HEX"), QStringLiteral("HSV"),
                          QStringLiteral("Lab"), QStringLiteral("YUV"), QStringLiteral("YCbCr"),
                          QStringLiteral("XYZ")});
-    m_csCombo->setToolTip(tr("Color space for pixel value display"));
-    connect(m_csCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+    d->csCombo->setToolTip(tr("Color space for pixel value display"));
+    connect(d->csCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int idx)
             {
                 updateInspectorHeader(idx);
                 if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
                     requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
             });
-    inspHeader->addWidget(m_csCombo);
+    inspHeader->addWidget(d->csCombo);
 
-    m_kernelCombo = new QComboBox(this);
-    m_kernelCombo->setObjectName("pixelInspectorKernelCombo");
-    m_kernelCombo->addItems({QStringLiteral("1×1"), QStringLiteral("3×3"), QStringLiteral("5×5"),
+    d->kernelCombo = new QComboBox(this);
+    d->kernelCombo->setObjectName("pixelInspectorKernelCombo");
+    d->kernelCombo->addItems({QStringLiteral("1×1"), QStringLiteral("3×3"), QStringLiteral("5×5"),
                              QStringLiteral("7×7")});
-    m_kernelCombo->setCurrentIndex(1); // 3×3 by default
-    m_kernelCombo->setToolTip(
+    d->kernelCombo->setCurrentIndex(1); // 3×3 by default
+    d->kernelCombo->setToolTip(
         tr("Neighborhood stats kernel size (base cell luminance mean/variance)"));
-    connect(m_kernelCombo, &QComboBox::currentIndexChanged, this,
+    connect(d->kernelCombo, &QComboBox::currentIndexChanged, this,
             [this](int)
             {
                 if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
                     requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
             });
-    inspHeader->addWidget(m_kernelCombo);
+    inspHeader->addWidget(d->kernelCombo);
     sideLay->addLayout(inspHeader);
 
-    m_inspector = new QTableWidget(this);
-    m_inspector->setObjectName("pixelInspectorTable");
-    m_inspector->setColumnCount(7);
-    m_inspector->setHorizontalHeaderLabels({tr("#"), tr("Name"), QStringLiteral("R"),
+    d->inspector = new QTableWidget(this);
+    d->inspector->setObjectName("pixelInspectorTable");
+    d->inspector->setColumnCount(7);
+    d->inspector->setHorizontalHeaderLabels({tr("#"), tr("Name"), QStringLiteral("R"),
                                             QStringLiteral("G"), QStringLiteral("B"),
                                             QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
-    m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_inspector->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_inspector->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_inspector->horizontalHeader()->setStretchLastSection(true);
-    m_inspector->setFixedHeight(200);
-    setupInspectorContextMenu(m_inspector, this);
-    sideLay->addWidget(m_inspector);
+    d->inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    d->inspector->setSelectionMode(QAbstractItemView::SingleSelection);
+    d->inspector->setSelectionBehavior(QAbstractItemView::SelectRows);
+    d->inspector->horizontalHeader()->setStretchLastSection(true);
+    d->inspector->setFixedHeight(200);
+    setupInspectorContextMenu(d->inspector, this);
+    sideLay->addWidget(d->inspector);
 
-    m_statsLabel = new QLabel(tr("Neighborhood statistics: —"), this);
-    m_statsLabel->setObjectName("pixelInspectorStatsLabel");
-    m_statsLabel->setWordWrap(true);
-    m_statsLabel->setStyleSheet(
+    d->statsLabel = new QLabel(tr("Neighborhood statistics: —"), this);
+    d->statsLabel->setObjectName("pixelInspectorStatsLabel");
+    d->statsLabel->setWordWrap(true);
+    d->statsLabel->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
-    sideLay->addWidget(m_statsLabel);
+    sideLay->addWidget(d->statsLabel);
 
     buildHistogramPanel(sideLay);
     buildROIMeasurementPanel(sideLay);
@@ -226,8 +226,8 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
 void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
 {
     // ── Histogram (channels / log / ROI) ─────────────────────────────────
-    m_histTitle = new QLabel(tr("Histogram (full image)"), this);
-    sideLay->addWidget(m_histTitle);
+    d->histTitle = new QLabel(tr("Histogram (full image)"), this);
+    sideLay->addWidget(d->histTitle);
 
     auto *histOpts = new QHBoxLayout();
     auto makeChanChk = [this, histOpts](const QString &text, bool on, int channel) -> QCheckBox *
@@ -243,29 +243,29 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
         histOpts->addWidget(chk);
         return chk;
     };
-    m_histRChk = makeChanChk(QStringLiteral("R"), true, 0);
-    m_histGChk = makeChanChk(QStringLiteral("G"), true, 1);
-    m_histBChk = makeChanChk(QStringLiteral("B"), true, 2);
-    m_histLumaChk = makeChanChk(tr("Brightness"), false, 3);
-    m_histVChk = makeChanChk(tr("V (Value)"), false, 4);
-    m_histVChk->setToolTip(tr("V component in HSV space (maximum channel value max(R,G,B))"));
+    d->histRChk = makeChanChk(QStringLiteral("R"), true, 0);
+    d->histGChk = makeChanChk(QStringLiteral("G"), true, 1);
+    d->histBChk = makeChanChk(QStringLiteral("B"), true, 2);
+    d->histLumaChk = makeChanChk(tr("Brightness"), false, 3);
+    d->histVChk = makeChanChk(tr("V (Value)"), false, 4);
+    d->histVChk->setToolTip(tr("V component in HSV space (maximum channel value max(R,G,B))"));
 
-    m_histLogChk = new QCheckBox(QStringLiteral("Log"), this);
-    m_histLogChk->setToolTip(tr("Log Y-axis: low-count bins are no longer drowned out by peaks"));
-    connect(m_histLogChk, &QCheckBox::toggled, this,
+    d->histLogChk = new QCheckBox(QStringLiteral("Log"), this);
+    d->histLogChk->setToolTip(tr("Log Y-axis: low-count bins are no longer drowned out by peaks"));
+    connect(d->histLogChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
                 if (m_hist)
                     m_hist->setLogScale(on);
             });
-    histOpts->addWidget(m_histLogChk);
+    histOpts->addWidget(d->histLogChk);
 
-    m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
-    m_roiHistChk->setObjectName("roiHistogramToggle");
-    m_roiHistChk->setToolTip(
+    d->roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
+    d->roiHistChk->setObjectName("roiHistogramToggle");
+    d->roiHistChk->setToolTip(
         tr("Count only pixels inside the current ROI (box-select an ROI on the image first)"));
-    connect(m_roiHistChk, &QCheckBox::toggled, this, [this](bool) { refreshHistograms(); });
-    histOpts->addWidget(m_roiHistChk);
+    connect(d->roiHistChk, &QCheckBox::toggled, this, [this](bool) { refreshHistograms(); });
+    histOpts->addWidget(d->roiHistChk);
     histOpts->addStretch(1);
     sideLay->addLayout(histOpts);
 
@@ -275,11 +275,11 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     sideLay->addWidget(m_hist, 1);
 
     // M16.5: per-pane histogram toggle
-    m_perPaneHistChk = new QCheckBox(tr("Independent histogram per pane"), this);
-    m_perPaneHistChk->setObjectName("perPaneHistogramToggle");
-    m_perPaneHistChk->setChecked(false);
-    connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
-    sideLay->addWidget(m_perPaneHistChk);
+    d->perPaneHistChk = new QCheckBox(tr("Independent histogram per pane"), this);
+    d->perPaneHistChk->setObjectName("perPaneHistogramToggle");
+    d->perPaneHistChk->setChecked(false);
+    connect(d->perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
+    sideLay->addWidget(d->perPaneHistChk);
 }
 
 void CompareWorkspace::requestInspectorUpdate(int x, int y)
@@ -308,12 +308,12 @@ void CompareWorkspace::requestInspectorUpdate(int x, int y)
 
 void CompareWorkspace::updateInspectorHeader(int spaceIdx)
 {
-    if (!m_inspector)
+    if (!d->inspector)
         return;
     const int idx = std::clamp(spaceIdx, 0, 6);
     if (idx == m_inspectorSpaceIdx)
         return;
-    m_inspector->setHorizontalHeaderLabels(
+    d->inspector->setHorizontalHeaderLabels(
         {tr("#"), tr("Name"), QString::fromLatin1(kHeaders[idx][0]),
          QString::fromLatin1(kHeaders[idx][1]), QString::fromLatin1(kHeaders[idx][2]),
          QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
@@ -322,7 +322,7 @@ void CompareWorkspace::updateInspectorHeader(int spaceIdx)
 
 void CompareWorkspace::updateInspector(int x, int y)
 {
-    if (!m_inspector)
+    if (!d->inspector)
         return;
     // M30 diagnostic: expose the actual render count as a dynamic QObject
     // property so the deterministic regression tests can observe coalescing
@@ -332,10 +332,10 @@ void CompareWorkspace::updateInspector(int x, int y)
 
     m_lastInspectX = x;
     m_lastInspectY = y;
-    if (m_coordLabel)
-        m_coordLabel->setText(QStringLiteral("(%1, %2)").arg(x).arg(y));
+    if (d->coordLabel)
+        d->coordLabel->setText(QStringLiteral("(%1, %2)").arg(x).arg(y));
 
-    const int spaceIdx = m_csCombo ? std::clamp(m_csCombo->currentIndex(), 0, 6) : 0;
+    const int spaceIdx = d->csCombo ? std::clamp(d->csCombo->currentIndex(), 0, 6) : 0;
     const ColorSpace space = kSpaces[spaceIdx];
     updateInspectorHeader(spaceIdx);
 
@@ -359,15 +359,15 @@ void CompareWorkspace::updateInspector(int x, int y)
     // Reuse existing QTableWidgetItem objects across ordinary hovers: only
     // resize the row count when it actually changed and update text in place,
     // so successive renders do not destroy/reallocate every cell.
-    if (m_inspector->rowCount() != n)
-        m_inspector->setRowCount(n);
+    if (d->inspector->rowCount() != n)
+        d->inspector->setRowCount(n);
 
     updateInspectorRows(samples, space, baseIdx, x, y);
 
-    if (m_statsLabel)
+    if (d->statsLabel)
     {
         static const int kKernels[] = {1, 3, 5, 7};
-        const int kernelIndex = m_kernelCombo ? std::clamp(m_kernelCombo->currentIndex(), 0, 3) : 1;
+        const int kernelIndex = d->kernelCombo ? std::clamp(d->kernelCombo->currentIndex(), 0, 3) : 1;
         const int kernel = kKernels[kernelIndex];
         const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
         const CellAdjust baseAdjust =
@@ -380,7 +380,7 @@ void CompareWorkspace::updateInspector(int x, int y)
                       : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
-            m_statsLabel->setText(tr("Neighborhood %1×%1: luminance μ=%2 σ=%3 [%4, %5] · RGB mean "
+            d->statsLabel->setText(tr("Neighborhood %1×%1: luminance μ=%2 σ=%3 [%4, %5] · RGB mean "
                                      "(%6, %7, %8) · V mean %9")
                                       .arg(kernel)
                                       .arg(stats.mean, 0, 'f', 1)
@@ -393,7 +393,7 @@ void CompareWorkspace::updateInspector(int x, int y)
                                       .arg(stats.vMean, 0, 'f', 1));
         }
         else
-            m_statsLabel->setText(tr("Neighborhood statistics: —"));
+            d->statsLabel->setText(tr("Neighborhood statistics: —"));
     }
 }
 
@@ -405,10 +405,10 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
     {
         const InspectorSample &sample = samples[static_cast<size_t>(i)];
         const ImageFrame *img = m_engine.imageAt(i);
-        setCellText(m_inspector, i, 0, QString::number(i + 1));
+        setCellText(d->inspector, i, 0, QString::number(i + 1));
         const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
-        setCellText(m_inspector, i, 1, name);
-        if (auto *it0 = m_inspector->item(i, 0))
+        setCellText(d->inspector, i, 1, name);
+        if (auto *it0 = d->inspector->item(i, 0))
         {
             it0->setData(Qt::UserRole,
                          sample.valid
@@ -419,10 +419,10 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
         if (!sample.valid)
         {
             const QString invalid = QStringLiteral("Invalid");
-            setCellText(m_inspector, i, 2, invalid);
-            setCellText(m_inspector, i, 3,
+            setCellText(d->inspector, i, 2, invalid);
+            setCellText(d->inspector, i, 3,
                         space == ColorSpace::HEX ? QStringLiteral("—") : invalid);
-            setCellText(m_inspector, i, 4,
+            setCellText(d->inspector, i, 4,
                         space == ColorSpace::HEX ? QStringLiteral("—") : invalid);
         }
         else if (space == ColorSpace::HEX)
@@ -430,9 +430,9 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             const auto hex =
                 mviewer::core::toHex(static_cast<uint8_t>(sample.r), static_cast<uint8_t>(sample.g),
                                      static_cast<uint8_t>(sample.b));
-            setCellText(m_inspector, i, 2, QString::fromStdString(hex));
-            setCellText(m_inspector, i, 3, QStringLiteral("—"));
-            setCellText(m_inspector, i, 4, QStringLiteral("—"));
+            setCellText(d->inspector, i, 2, QString::fromStdString(hex));
+            setCellText(d->inspector, i, 3, QStringLiteral("—"));
+            setCellText(d->inspector, i, 4, QStringLiteral("—"));
         }
         else
         {
@@ -441,9 +441,9 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             const auto color = mviewer::core::toColorSpace(
                 static_cast<uint8_t>(sample.r), static_cast<uint8_t>(sample.g),
                 static_cast<uint8_t>(sample.b), space, matrix);
-            setCellText(m_inspector, i, 2, formatChannel(space, color.c1));
-            setCellText(m_inspector, i, 3, formatChannel(space, color.c2));
-            setCellText(m_inspector, i, 4, formatChannel(space, color.c3));
+            setCellText(d->inspector, i, 2, formatChannel(space, color.c1));
+            setCellText(d->inspector, i, 3, formatChannel(space, color.c2));
+            setCellText(d->inspector, i, 4, formatChannel(space, color.c3));
         }
 
         QString delta = QStringLiteral("Invalid");
@@ -480,7 +480,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
                                .arg(dE76, 0, 'f', 2);
             }
         }
-        setCellText(m_inspector, i, 5, delta, deltaTip);
+        setCellText(d->inspector, i, 5, delta, deltaTip);
 
         QString raw16 = QStringLiteral("Invalid");
         if (sample.valid)
@@ -510,7 +510,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
                             .arg(QStringLiteral("Adjusted preview"));
             }
         }
-        setCellText(m_inspector, i, 6, raw16);
+        setCellText(d->inspector, i, 6, raw16);
     }
 }
 

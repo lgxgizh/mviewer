@@ -82,19 +82,19 @@ ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust 
 
 void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
 {
-    m_editPanel = new QWidget(m_sidePanel);
-    auto *editLay = new QVBoxLayout(m_editPanel);
+    d->editPanel = new QWidget(d->sidePanel);
+    auto *editLay = new QVBoxLayout(d->editPanel);
     editLay->setContentsMargins(0, 4, 0, 0);
     editLay->setSpacing(mviewer::ui::metrics::kSpace4);
 
-    m_editLabel = new QLabel(tr("— Select a pane to edit —"), m_editPanel);
-    m_editLabel->setStyleSheet(
+    d->editLabel = new QLabel(tr("— Select a pane to edit —"), d->editPanel);
+    d->editLabel->setStyleSheet(
         QStringLiteral("font-weight:bold;color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
-    editLay->addWidget(m_editLabel);
+    editLay->addWidget(d->editLabel);
     auto *previewHint = new QLabel(tr("Adjustments are preview-only and do not overwrite the "
                                       "original file; export as a new PNG or TIFF"),
-                                   m_editPanel);
+                                   d->editPanel);
     previewHint->setObjectName("previewOnlyHint");
     previewHint->setStyleSheet(
         QStringLiteral("color:%1;font-size:11px;")
@@ -105,20 +105,20 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Brightness slider [-255, 255]; 0=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("Brightness"), m_editPanel));
-        m_brightSlider = new QSlider(Qt::Horizontal, m_editPanel);
-        m_brightSlider->setObjectName("brightnessSlider");
-        m_brightSlider->setRange(-255, 255);
-        m_brightSlider->setValue(0);
-        m_brightVal = new QLabel("0", m_editPanel);
-        m_brightVal->setMinimumWidth(30);
-        row->addWidget(m_brightSlider);
-        row->addWidget(m_brightVal);
+        row->addWidget(new QLabel(tr("Brightness"), d->editPanel));
+        d->brightSlider = new QSlider(Qt::Horizontal, d->editPanel);
+        d->brightSlider->setObjectName("brightnessSlider");
+        d->brightSlider->setRange(-255, 255);
+        d->brightSlider->setValue(0);
+        d->brightVal = new QLabel("0", d->editPanel);
+        d->brightVal->setMinimumWidth(30);
+        row->addWidget(d->brightSlider);
+        row->addWidget(d->brightVal);
         editLay->addLayout(row);
-        connect(m_brightSlider, &QSlider::valueChanged, this,
+        connect(d->brightSlider, &QSlider::valueChanged, this,
                 [this](int v)
                 {
-                    m_brightVal->setText(QString::number(v));
+                    d->brightVal->setText(QString::number(v));
                     onAdjChanged();
                 });
     }
@@ -126,19 +126,19 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Contrast slider [0..300] → float [0.0..3.0]; 100=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("Contrast"), m_editPanel));
-        m_contrastSlider = new QSlider(Qt::Horizontal, m_editPanel);
-        m_contrastSlider->setRange(0, 300);
-        m_contrastSlider->setValue(100);
-        m_contrastVal = new QLabel("1.0", m_editPanel);
-        m_contrastVal->setMinimumWidth(30);
-        row->addWidget(m_contrastSlider);
-        row->addWidget(m_contrastVal);
+        row->addWidget(new QLabel(tr("Contrast"), d->editPanel));
+        d->contrastSlider = new QSlider(Qt::Horizontal, d->editPanel);
+        d->contrastSlider->setRange(0, 300);
+        d->contrastSlider->setValue(100);
+        d->contrastVal = new QLabel("1.0", d->editPanel);
+        d->contrastVal->setMinimumWidth(30);
+        row->addWidget(d->contrastSlider);
+        row->addWidget(d->contrastVal);
         editLay->addLayout(row);
-        connect(m_contrastSlider, &QSlider::valueChanged, this,
+        connect(d->contrastSlider, &QSlider::valueChanged, this,
                 [this](int v)
                 {
-                    m_contrastVal->setText(QString::number(v / 100.0, 'f', 2));
+                    d->contrastVal->setText(QString::number(v / 100.0, 'f', 2));
                     onAdjChanged();
                 });
     }
@@ -146,26 +146,26 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Gamma slider [5..800] → float [0.05..8.0]; 100=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("Gamma"), m_editPanel));
-        m_gammaSlider = new QSlider(Qt::Horizontal, m_editPanel);
-        m_gammaSlider->setRange(5, 800);
-        m_gammaSlider->setValue(100);
-        m_gammaVal = new QLabel("1.00", m_editPanel);
-        m_gammaVal->setMinimumWidth(30);
-        row->addWidget(m_gammaSlider);
-        row->addWidget(m_gammaVal);
+        row->addWidget(new QLabel(tr("Gamma"), d->editPanel));
+        d->gammaSlider = new QSlider(Qt::Horizontal, d->editPanel);
+        d->gammaSlider->setRange(5, 800);
+        d->gammaSlider->setValue(100);
+        d->gammaVal = new QLabel("1.00", d->editPanel);
+        d->gammaVal->setMinimumWidth(30);
+        row->addWidget(d->gammaSlider);
+        row->addWidget(d->gammaVal);
         editLay->addLayout(row);
-        connect(m_gammaSlider, &QSlider::valueChanged, this,
+        connect(d->gammaSlider, &QSlider::valueChanged, this,
                 [this](int v)
                 {
-                    m_gammaVal->setText(QString::number(v / 100.0, 'f', 2));
+                    d->gammaVal->setText(QString::number(v / 100.0, 'f', 2));
                     onAdjChanged();
                 });
     }
 
     buildSecondaryEditControls(editLay);
 
-    sideLayout->addWidget(m_editPanel);
+    sideLayout->addWidget(d->editPanel);
 }
 
 void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
@@ -174,64 +174,64 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         [this, editLay](const QString &label, QSlider *&slider, QLabel *&value, auto callback)
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(label, m_editPanel));
-        slider = new QSlider(Qt::Horizontal, m_editPanel);
+        row->addWidget(new QLabel(label, d->editPanel));
+        slider = new QSlider(Qt::Horizontal, d->editPanel);
         slider->setRange(1, 500);
         slider->setValue(100);
-        value = new QLabel("1.00", m_editPanel);
+        value = new QLabel("1.00", d->editPanel);
         value->setMinimumWidth(30);
         row->addWidget(slider);
         row->addWidget(value);
         editLay->addLayout(row);
         connect(slider, &QSlider::valueChanged, this, callback);
     };
-    addGain(tr("WB R"), m_rGainSlider, m_rGainVal,
+    addGain(tr("WB R"), d->rGainSlider, d->rGainVal,
             [this](int v)
             {
-                m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                d->rGainVal->setText(QString::number(v / 100.0, 'f', 2));
                 onAdjChanged();
             });
-    addGain(tr("WB B"), m_bGainSlider, m_bGainVal,
+    addGain(tr("WB B"), d->bGainSlider, d->bGainVal,
             [this](int v)
             {
-                m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                d->bGainVal->setText(QString::number(v / 100.0, 'f', 2));
                 onAdjChanged();
             });
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("Rotate"), m_editPanel));
-        auto *btnCCW = new QPushButton(tr("↺ Counterclockwise (Ctrl+Shift+R)"), m_editPanel);
+        row->addWidget(new QLabel(tr("Rotate"), d->editPanel));
+        auto *btnCCW = new QPushButton(tr("↺ Counterclockwise (Ctrl+Shift+R)"), d->editPanel);
         btnCCW->setObjectName("rotateCCWButton");
         btnCCW->setToolTip(
             tr("Rotate 90° counterclockwise (preview only, does not modify the original file)"));
-        auto *btnCW = new QPushButton(tr("↻ Clockwise (Ctrl+R)"), m_editPanel);
+        auto *btnCW = new QPushButton(tr("↻ Clockwise (Ctrl+R)"), d->editPanel);
         btnCW->setObjectName("rotateCWButton");
         btnCW->setToolTip(
             tr("Rotate 90° clockwise (preview only, does not modify the original file)"));
-        m_rotVal = new QLabel("0°", m_editPanel);
-        m_rotVal->setMinimumWidth(30);
-        m_syncRotatePanelChk = new QCheckBox(tr("Sync all images (Alt+R)"), m_editPanel);
-        m_syncRotatePanelChk->setObjectName("syncRotatePanelCheck");
-        m_syncRotatePanelChk->setToolTip(tr("When checked, rotation and flip are applied in sync "
+        d->rotVal = new QLabel("0°", d->editPanel);
+        d->rotVal->setMinimumWidth(30);
+        d->syncRotatePanelChk = new QCheckBox(tr("Sync all images (Alt+R)"), d->editPanel);
+        d->syncRotatePanelChk->setObjectName("syncRotatePanelCheck");
+        d->syncRotatePanelChk->setToolTip(tr("When checked, rotation and flip are applied in sync "
                                             "to all images being compared (Alt+R)"));
-        m_syncRotatePanelChk->setChecked(m_syncRotate);
-        connect(m_syncRotatePanelChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
+        d->syncRotatePanelChk->setChecked(m_syncRotate);
+        connect(d->syncRotatePanelChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
         row->addWidget(btnCCW);
         row->addWidget(btnCW);
-        row->addWidget(m_rotVal);
-        row->addWidget(m_syncRotatePanelChk);
+        row->addWidget(d->rotVal);
+        row->addWidget(d->syncRotatePanelChk);
         editLay->addLayout(row);
         connect(btnCCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(-90); });
         connect(btnCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(90); });
     }
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("Flip"), m_editPanel));
-        auto *btnFlipH = new QPushButton(tr("⇄ Horizontal (Ctrl+Shift+H)"), m_editPanel);
+        row->addWidget(new QLabel(tr("Flip"), d->editPanel));
+        auto *btnFlipH = new QPushButton(tr("⇄ Horizontal (Ctrl+Shift+H)"), d->editPanel);
         btnFlipH->setObjectName("flipHButton");
         btnFlipH->setToolTip(tr("Flip current pane horizontally (Ctrl+Shift+H, preview only, does "
                                 "not modify the original file)"));
-        auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Alt+V)"), m_editPanel);
+        auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Alt+V)"), d->editPanel);
         btnFlipV->setObjectName("flipVButton");
         btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Alt+V, preview only, does "
                                 "not modify the original file)"));
@@ -242,14 +242,14 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         connect(btnFlipV, &QPushButton::clicked, this, [this]() { flipCurrentCell(false); });
     }
     buildUsmControls(editLay);
-    m_resetAdjBtn = new QPushButton(tr("Reset adjustments"), m_editPanel);
-    m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
-    connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
-    editLay->addWidget(m_resetAdjBtn);
+    d->resetAdjBtn = new QPushButton(tr("Reset adjustments"), d->editPanel);
+    d->resetAdjBtn->setObjectName("resetAdjustmentsButton");
+    connect(d->resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
+    editLay->addWidget(d->resetAdjBtn);
     addAdjustedExportButton(editLay);
     for (QSlider *slider :
-         {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider, m_bGainSlider,
-          m_usmAmountSlider, m_usmRadiusSlider, m_usmThresholdSlider})
+         {d->brightSlider, d->contrastSlider, d->gammaSlider, d->rGainSlider, d->bGainSlider,
+          d->usmAmountSlider, d->usmRadiusSlider, d->usmThresholdSlider})
         connect(slider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
 }
 
@@ -272,46 +272,46 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
 
     // Block signals while setting slider values to avoid triggering onAdjChanged
     {
-        QSignalBlocker b(m_brightSlider);
-        m_brightSlider->setValue(a.brightness);
+        QSignalBlocker b(d->brightSlider);
+        d->brightSlider->setValue(a.brightness);
     }
-    m_brightVal->setText(QString::number(a.brightness));
+    d->brightVal->setText(QString::number(a.brightness));
 
     {
-        QSignalBlocker b(m_contrastSlider);
-        m_contrastSlider->setValue(static_cast<int>(a.contrast * 100.0f));
+        QSignalBlocker b(d->contrastSlider);
+        d->contrastSlider->setValue(static_cast<int>(a.contrast * 100.0f));
     }
-    m_contrastVal->setText(QString::number(a.contrast, 'f', 2));
+    d->contrastVal->setText(QString::number(a.contrast, 'f', 2));
 
     {
-        QSignalBlocker b(m_gammaSlider);
-        m_gammaSlider->setValue(static_cast<int>(a.gamma * 100.0f));
+        QSignalBlocker b(d->gammaSlider);
+        d->gammaSlider->setValue(static_cast<int>(a.gamma * 100.0f));
     }
-    m_gammaVal->setText(QString::number(a.gamma, 'f', 2));
+    d->gammaVal->setText(QString::number(a.gamma, 'f', 2));
 
     {
-        QSignalBlocker b(m_rGainSlider);
-        m_rGainSlider->setValue(static_cast<int>(a.rGain * 100.0f));
+        QSignalBlocker b(d->rGainSlider);
+        d->rGainSlider->setValue(static_cast<int>(a.rGain * 100.0f));
     }
-    m_rGainVal->setText(QString::number(a.rGain, 'f', 2));
+    d->rGainVal->setText(QString::number(a.rGain, 'f', 2));
 
     {
-        QSignalBlocker b(m_bGainSlider);
-        m_bGainSlider->setValue(static_cast<int>(a.bGain * 100.0f));
+        QSignalBlocker b(d->bGainSlider);
+        d->bGainSlider->setValue(static_cast<int>(a.bGain * 100.0f));
     }
-    m_bGainVal->setText(QString::number(a.bGain, 'f', 2));
-    if (m_rotVal)
-        m_rotVal->setText(QString::number(a.rotation) + "°");
+    d->bGainVal->setText(QString::number(a.bGain, 'f', 2));
+    if (d->rotVal)
+        d->rotVal->setText(QString::number(a.rotation) + "°");
     syncUsmControls(a);
 
     const ImageFrame *img = m_engine.imageAt(cellIdx);
-    m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
+    d->editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
                              : tr("Pane %1").arg(cellIdx + 1));
     // Selecting a pane does not change the cursor's sample position. Repaint the
     // Inspector from the cached hover coordinate so a pane click immediately
     // reflects the current adjusted display without requiring another mouse move.
     // M30: coalesced with any pending hover render.
-    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
+    if (d->sidePanel && d->sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 }
 
@@ -321,27 +321,27 @@ void CompareWorkspace::onAdjChanged()
         return;
 
     CellAdjust &a = m_cellAdjusts[static_cast<size_t>(m_editIdx)];
-    a.brightness = m_brightSlider->value();
-    a.contrast = m_contrastSlider->value() / 100.0f;
-    a.gamma = m_gammaSlider->value() / 100.0f;
-    a.rGain = m_rGainSlider->value() / 100.0f;
-    a.bGain = m_bGainSlider->value() / 100.0f;
-    if (m_usmChk)
-        a.usmEnabled = m_usmChk->isChecked();
-    if (m_usmAmountSlider)
-        a.usmAmount = m_usmAmountSlider->value() / 100.0;
-    if (m_usmRadiusSlider)
-        a.usmRadius = m_usmRadiusSlider->value() / 10.0;
-    if (m_usmThresholdSlider)
-        a.usmThreshold = m_usmThresholdSlider->value();
-    if (m_usmLumaChk)
-        a.usmLumaOnly = m_usmLumaChk->isChecked();
+    a.brightness = d->brightSlider->value();
+    a.contrast = d->contrastSlider->value() / 100.0f;
+    a.gamma = d->gammaSlider->value() / 100.0f;
+    a.rGain = d->rGainSlider->value() / 100.0f;
+    a.bGain = d->bGainSlider->value() / 100.0f;
+    if (d->usmChk)
+        a.usmEnabled = d->usmChk->isChecked();
+    if (d->usmAmountSlider)
+        a.usmAmount = d->usmAmountSlider->value() / 100.0;
+    if (d->usmRadiusSlider)
+        a.usmRadius = d->usmRadiusSlider->value() / 10.0;
+    if (d->usmThresholdSlider)
+        a.usmThreshold = d->usmThresholdSlider->value();
+    if (d->usmLumaChk)
+        a.usmLumaOnly = d->usmLumaChk->isChecked();
 
     applyAdjToCell(m_editIdx);
 
-    const bool sliderDown = anyAdjustSliderDown({m_brightSlider, m_contrastSlider, m_gammaSlider,
-                                                 m_rGainSlider, m_bGainSlider, m_usmAmountSlider,
-                                                 m_usmRadiusSlider, m_usmThresholdSlider});
+    const bool sliderDown = anyAdjustSliderDown({d->brightSlider, d->contrastSlider, d->gammaSlider,
+                                                 d->rGainSlider, d->bGainSlider, d->usmAmountSlider,
+                                                 d->usmRadiusSlider, d->usmThresholdSlider});
     if (!sliderDown)
     {
         onAdjEditFinished();
@@ -436,7 +436,7 @@ void CompareWorkspace::onAdjEditFinished()
     // the side panel is visible one includeMain batch also covers the pane
     // overlays; when it is hidden only the edited pane is refreshed (any
     // still-empty overlays are coalesced into the same batch by scheduling).
-    const bool analysisVisible = m_sideChk && m_sideChk->isChecked();
+    const bool analysisVisible = d->sideChk && d->sideChk->isChecked();
     if (analysisVisible)
         refreshHistograms();
     else if (m_paneHistOverlay)
@@ -564,7 +564,7 @@ void CompareWorkspace::onSavePreset()
     }
     root["adjustments"] = adjArray;
     root["perPaneHist"] = m_perPaneHist;
-    root["layoutIndex"] = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+    root["layoutIndex"] = d->layoutCombo ? d->layoutCombo->currentIndex() : 0;
 
     // Save session settings (includes engine state + UI state)
     const mviewer::domain::CompareSession sess = compareSession();
@@ -646,8 +646,8 @@ void CompareWorkspace::onLoadPreset()
     {
         const bool ph = root["perPaneHist"].toBool();
         m_perPaneHist = ph;
-        if (m_perPaneHistChk)
-            m_perPaneHistChk->setChecked(ph);
+        if (d->perPaneHistChk)
+            d->perPaneHistChk->setChecked(ph);
     }
 
     // Checkpoint before session/layout restoration: if applySession or the
@@ -659,11 +659,11 @@ void CompareWorkspace::onLoadPreset()
     restorePresetSession(root);
 
     // Restore layout combo
-    if (root.contains("layoutIndex") && m_layoutCombo)
+    if (root.contains("layoutIndex") && d->layoutCombo)
     {
         const int li = root["layoutIndex"].toInt(0);
-        if (li >= 0 && li < m_layoutCombo->count())
-            m_layoutCombo->setCurrentIndex(li);
+        if (li >= 0 && li < d->layoutCombo->count())
+            d->layoutCombo->setCurrentIndex(li);
     }
 
     finishPresetRestore(displayGenBeforeRestore);
@@ -767,7 +767,7 @@ void CompareWorkspace::finishPresetRestore(uint64_t displayGenBeforeRestore)
         scheduleDisplayMaterialization(all);
     }
     refreshAllDiffOverlays();
-    if (m_sidePanel && m_sidePanel->isVisible())
+    if (d->sidePanel && d->sidePanel->isVisible())
         refreshHistograms();
     update();
 }

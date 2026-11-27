@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.233** · Release tag: **v1.0.233**
+> Snapshot: 2026-11-27 · Version: **1.0.234** · Release tag: **v1.0.234**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,17 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.234 - compareworkspace.h off the ceiling via Private (2026-11-27)
+
+- `compareworkspace_p.h` gains `CompareWorkspace::Private`: all 99 panel widget
+  pointers (`d-><name>`, same leaf names) move out of `compareworkspace.h`
+  (798 -> 728 lines). Two stay in the header because a test friend struct reaches
+  them (`m_swipeChk`, `m_compareCanvas`).
+- Deliberately not grouped sub-structs or controllers: flat passive state, and
+  every compare TU keeps reading the handles directly.
+- Also fixes the ROADMAP_PUBLIC version string that v1.0.233 left stale
+  (caught by `version_consistency`).
 
 ## 1.0.233 - imageviewer.h off the ceiling via Private, not controllers (2026-11-27)
 

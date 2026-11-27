@@ -418,7 +418,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     // delivery stays pinned until the full raster follows.
     reapplyPinnedCellTransforms(!r.provisional);
 
-    if (inspectorStale && m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
+    if (inspectorStale && d->sidePanel && d->sidePanel->isVisible() && m_lastInspectX >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
     updateTemporaryCompareAvailability();

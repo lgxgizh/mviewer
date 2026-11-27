@@ -45,7 +45,7 @@ int CompareWorkspace::paneIndexAtGlobalPos(const QPoint &globalPos) const
 
 bool CompareWorkspace::temporaryHoldBlocked() const
 {
-    return (m_blinkChk && m_blinkChk->isChecked());
+    return (d->blinkChk && d->blinkChk->isChecked());
 }
 
 void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
@@ -86,8 +86,8 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
     m_temporarySourcePane = sourcePane;
-    if (m_temporaryCompareButton && m_temporaryDigit == 0)
-        m_temporaryCompareButton->setDown(true);
+    if (d->temporaryCompareButton && m_temporaryDigit == 0)
+        d->temporaryCompareButton->setDown(true);
     applyDisplayedPaneOverlays();
     update();
 }
@@ -124,8 +124,8 @@ void CompareWorkspace::beginClassicTemporaryCompare()
     {
         m_canvasTemporaryPane = 1;
         m_temporaryCompareActive = true;
-        if (m_temporaryCompareButton)
-            m_temporaryCompareButton->setDown(true);
+        if (d->temporaryCompareButton)
+            d->temporaryCompareButton->setDown(true);
         applyDisplayedPaneOverlays();
         update();
         return;
@@ -160,8 +160,8 @@ void CompareWorkspace::beginTemporaryCompare()
     {
         m_canvasTemporaryPane = decision.sourcePane;
         m_temporaryCompareActive = true;
-        if (m_temporaryCompareButton)
-            m_temporaryCompareButton->setDown(true);
+        if (d->temporaryCompareButton)
+            d->temporaryCompareButton->setDown(true);
         applyDisplayedPaneOverlays();
         update();
         return;
@@ -210,8 +210,8 @@ void CompareWorkspace::endTemporaryCompare()
     m_temporaryTargetPane = -1;
     m_temporarySourcePane = -1;
     m_temporaryDigit = 0;
-    if (m_temporaryCompareButton)
-        m_temporaryCompareButton->setDown(false);
+    if (d->temporaryCompareButton)
+        d->temporaryCompareButton->setDown(false);
     applyDisplayedPaneOverlays();
     update();
 }
@@ -224,7 +224,7 @@ int CompareWorkspace::displayedImageIndex(int pane) const
     {
         // Split keeps the switch in the hovered half; the other canvas modes
         // draw one full-canvas image, labelled as pane 0.
-        const bool split = m_splitChk && m_splitChk->isChecked();
+        const bool split = d->splitChk && d->splitChk->isChecked();
         const int shownIn = split ? 1 - m_canvasTemporaryPane : 0;
         return pane == shownIn ? m_canvasTemporaryPane : pane;
     }
@@ -281,10 +281,10 @@ void CompareWorkspace::updateTemporaryCompareAvailability()
         !m_cellViews[0]->displayImage().isNull() && !m_cellViews[1]->displayImage().isNull() &&
         m_cellViews[0]->sourceSize().isValid() && m_cellViews[1]->sourceSize().isValid();
     const bool available = imagesReady && !temporaryHoldBlocked();
-    if (m_temporaryCompareButton)
+    if (d->temporaryCompareButton)
     {
-        m_temporaryCompareButton->setEnabled(available);
-        m_temporaryCompareButton->setToolTip(temporaryCompareTooltip());
+        d->temporaryCompareButton->setEnabled(available);
+        d->temporaryCompareButton->setToolTip(temporaryCompareTooltip());
     }
     updatePaneIndexBadges();
     if (!available && m_temporaryCompareActive && m_temporaryDigit == 0)
@@ -301,17 +301,17 @@ void CompareWorkspace::refreshCompareControlTooltips()
             return;
         widget->setToolTip(widget->isEnabled() ? enabledTip : disabledTip);
     };
-    setTip(m_swapBtn, tr("Swap pane order (shortcut X)"),
+    setTip(d->swapBtn, tr("Swap pane order (shortcut X)"),
            loading ? tr("Images are still loading; cannot swap yet")
                    : tr("At least 2 images are required to swap (shortcut X)"));
-    setTip(m_analyzeBtn, tr("Open Comparison Inspection Panel"),
+    setTip(d->analyzeBtn, tr("Open Comparison Inspection Panel"),
            loading ? tr("Images are still loading; cannot analyze yet")
                    : tr("No images available to analyze"));
-    setTip(m_exportReportBtn, tr("Export comparison results as an HTML/Markdown/JSON report"),
+    setTip(d->exportReportBtn, tr("Export comparison results as an HTML/Markdown/JSON report"),
            count < 2 ? tr("At least 2 images are required to export a report")
                      : tr("Images are still loading; cannot export a report yet"));
-    if (m_clearLinksBtn)
-        m_clearLinksBtn->setToolTip(clearLinkTooltip());
+    if (d->clearLinksBtn)
+        d->clearLinksBtn->setToolTip(clearLinkTooltip());
     updateTemporaryCompareAvailability();
 }
 
@@ -339,9 +339,9 @@ QString CompareWorkspace::temporaryCompareTooltip() const
 
 QString CompareWorkspace::clearLinkTooltip() const
 {
-    if (m_clearLinksBtn && m_clearLinksBtn->isEnabled())
+    if (d->clearLinksBtn && d->clearLinksBtn->isEnabled())
         return tr("Clear all Pixel Link markers");
-    const bool linkOn = m_pixelLinkChk && m_pixelLinkChk->isChecked();
+    const bool linkOn = d->pixelLinkChk && d->pixelLinkChk->isChecked();
     if (!linkOn)
         return tr("Check \"Pixel Link\" first (available only with 2 images)");
     return tr("No markers yet");

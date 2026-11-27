@@ -52,125 +52,125 @@ void setBlockedSlider(QSlider *slider, QLabel *label, int value, const QString &
 
 void CompareWorkspace::buildUsmControls(QVBoxLayout *editLay)
 {
-    m_usmChk = new QCheckBox(tr("USM Sharpen"), m_editPanel);
-    m_usmChk->setObjectName(QStringLiteral("usmEnabledCheck"));
-    editLay->addWidget(m_usmChk);
+    d->usmChk = new QCheckBox(tr("USM Sharpen"), d->editPanel);
+    d->usmChk->setObjectName(QStringLiteral("usmEnabledCheck"));
+    editLay->addWidget(d->usmChk);
 
     auto addSlider = [this, editLay](const QString &label, QSlider *&slider, QLabel *&value,
                                      const char *objectName, int minValue, int maxValue,
                                      int initial, const QString &initialText)
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(label, m_editPanel));
-        slider = new QSlider(Qt::Horizontal, m_editPanel);
+        row->addWidget(new QLabel(label, d->editPanel));
+        slider = new QSlider(Qt::Horizontal, d->editPanel);
         slider->setObjectName(QLatin1String(objectName));
         slider->setRange(minValue, maxValue);
         slider->setValue(initial);
-        value = new QLabel(initialText, m_editPanel);
+        value = new QLabel(initialText, d->editPanel);
         value->setMinimumWidth(40);
         row->addWidget(slider);
         row->addWidget(value);
         editLay->addLayout(row);
     };
-    addSlider(tr("Quantity"), m_usmAmountSlider, m_usmAmountVal, "usmAmountSlider", 0, 500, 150,
+    addSlider(tr("Quantity"), d->usmAmountSlider, d->usmAmountVal, "usmAmountSlider", 0, 500, 150,
               QStringLiteral("150%"));
-    addSlider(tr("Radius"), m_usmRadiusSlider, m_usmRadiusVal, "usmRadiusSlider", 1, 200, 15,
+    addSlider(tr("Radius"), d->usmRadiusSlider, d->usmRadiusVal, "usmRadiusSlider", 1, 200, 15,
               QStringLiteral("1.5"));
-    addSlider(tr("Threshold"), m_usmThresholdSlider, m_usmThresholdVal, "usmThresholdSlider", 0,
+    addSlider(tr("Threshold"), d->usmThresholdSlider, d->usmThresholdVal, "usmThresholdSlider", 0,
               255, 4, QStringLiteral("4"));
-    connect(m_usmAmountSlider, &QSlider::valueChanged, this,
+    connect(d->usmAmountSlider, &QSlider::valueChanged, this,
             [this](int value)
             {
-                if (m_usmAmountVal)
-                    m_usmAmountVal->setText(QString::number(value) + QLatin1Char('%'));
+                if (d->usmAmountVal)
+                    d->usmAmountVal->setText(QString::number(value) + QLatin1Char('%'));
                 onAdjChanged();
             });
-    connect(m_usmRadiusSlider, &QSlider::valueChanged, this,
+    connect(d->usmRadiusSlider, &QSlider::valueChanged, this,
             [this](int value)
             {
-                if (m_usmRadiusVal)
-                    m_usmRadiusVal->setText(QString::number(value / 10.0, 'f', 1));
+                if (d->usmRadiusVal)
+                    d->usmRadiusVal->setText(QString::number(value / 10.0, 'f', 1));
                 onAdjChanged();
             });
-    connect(m_usmThresholdSlider, &QSlider::valueChanged, this,
+    connect(d->usmThresholdSlider, &QSlider::valueChanged, this,
             [this](int value)
             {
-                if (m_usmThresholdVal)
-                    m_usmThresholdVal->setText(QString::number(value));
+                if (d->usmThresholdVal)
+                    d->usmThresholdVal->setText(QString::number(value));
                 onAdjChanged();
             });
 
-    m_usmLumaChk = new QCheckBox(tr("Brightness only"), m_editPanel);
-    m_usmLumaChk->setObjectName(QStringLiteral("usmLumaOnlyCheck"));
-    editLay->addWidget(m_usmLumaChk);
-    connect(m_usmLumaChk, &QCheckBox::toggled, this, [this](bool) { onAdjChanged(); });
-    connect(m_usmChk, &QCheckBox::toggled, this,
+    d->usmLumaChk = new QCheckBox(tr("Brightness only"), d->editPanel);
+    d->usmLumaChk->setObjectName(QStringLiteral("usmLumaOnlyCheck"));
+    editLay->addWidget(d->usmLumaChk);
+    connect(d->usmLumaChk, &QCheckBox::toggled, this, [this](bool) { onAdjChanged(); });
+    connect(d->usmChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
-                if (m_usmAmountSlider)
-                    m_usmAmountSlider->setEnabled(on);
-                if (m_usmRadiusSlider)
-                    m_usmRadiusSlider->setEnabled(on);
-                if (m_usmThresholdSlider)
-                    m_usmThresholdSlider->setEnabled(on);
-                if (m_usmLumaChk)
-                    m_usmLumaChk->setEnabled(on);
+                if (d->usmAmountSlider)
+                    d->usmAmountSlider->setEnabled(on);
+                if (d->usmRadiusSlider)
+                    d->usmRadiusSlider->setEnabled(on);
+                if (d->usmThresholdSlider)
+                    d->usmThresholdSlider->setEnabled(on);
+                if (d->usmLumaChk)
+                    d->usmLumaChk->setEnabled(on);
                 onAdjChanged();
             });
-    if (m_usmAmountSlider)
-        m_usmAmountSlider->setEnabled(false);
-    if (m_usmRadiusSlider)
-        m_usmRadiusSlider->setEnabled(false);
-    if (m_usmThresholdSlider)
-        m_usmThresholdSlider->setEnabled(false);
-    if (m_usmLumaChk)
-        m_usmLumaChk->setEnabled(false);
+    if (d->usmAmountSlider)
+        d->usmAmountSlider->setEnabled(false);
+    if (d->usmRadiusSlider)
+        d->usmRadiusSlider->setEnabled(false);
+    if (d->usmThresholdSlider)
+        d->usmThresholdSlider->setEnabled(false);
+    if (d->usmLumaChk)
+        d->usmLumaChk->setEnabled(false);
 }
 
 void CompareWorkspace::syncUsmControls(const CellAdjust &adjust)
 {
-    if (!m_usmChk)
+    if (!d->usmChk)
         return;
     {
-        const QSignalBlocker blocker(m_usmChk);
-        m_usmChk->setChecked(adjust.usmEnabled);
+        const QSignalBlocker blocker(d->usmChk);
+        d->usmChk->setChecked(adjust.usmEnabled);
     }
     const int amount = std::clamp(static_cast<int>(std::lround(adjust.usmAmount * 100.0)), 0, 500);
     const int radius = std::clamp(static_cast<int>(std::lround(adjust.usmRadius * 10.0)), 1, 200);
     const int threshold = std::clamp(adjust.usmThreshold, 0, 255);
-    setBlockedSlider(m_usmAmountSlider, m_usmAmountVal, amount,
+    setBlockedSlider(d->usmAmountSlider, d->usmAmountVal, amount,
                      QString::number(amount) + QLatin1Char('%'));
-    setBlockedSlider(m_usmRadiusSlider, m_usmRadiusVal, radius,
+    setBlockedSlider(d->usmRadiusSlider, d->usmRadiusVal, radius,
                      QString::number(radius / 10.0, 'f', 1));
-    setBlockedSlider(m_usmThresholdSlider, m_usmThresholdVal, threshold,
+    setBlockedSlider(d->usmThresholdSlider, d->usmThresholdVal, threshold,
                      QString::number(threshold));
-    if (m_usmLumaChk)
+    if (d->usmLumaChk)
     {
-        const QSignalBlocker blocker(m_usmLumaChk);
-        m_usmLumaChk->setChecked(adjust.usmLumaOnly);
+        const QSignalBlocker blocker(d->usmLumaChk);
+        d->usmLumaChk->setChecked(adjust.usmLumaOnly);
     }
-    if (m_usmAmountSlider)
-        m_usmAmountSlider->setEnabled(adjust.usmEnabled);
-    if (m_usmRadiusSlider)
-        m_usmRadiusSlider->setEnabled(adjust.usmEnabled);
-    if (m_usmThresholdSlider)
-        m_usmThresholdSlider->setEnabled(adjust.usmEnabled);
-    if (m_usmLumaChk)
-        m_usmLumaChk->setEnabled(adjust.usmEnabled);
+    if (d->usmAmountSlider)
+        d->usmAmountSlider->setEnabled(adjust.usmEnabled);
+    if (d->usmRadiusSlider)
+        d->usmRadiusSlider->setEnabled(adjust.usmEnabled);
+    if (d->usmThresholdSlider)
+        d->usmThresholdSlider->setEnabled(adjust.usmEnabled);
+    if (d->usmLumaChk)
+        d->usmLumaChk->setEnabled(adjust.usmEnabled);
 }
 
 void CompareWorkspace::addAdjustedExportButton(QVBoxLayout *editLay)
 {
-    m_exportAdjustedBtn =
-        new QPushButton(tr("Export adjusted result for this image..."), m_editPanel);
-    m_exportAdjustedBtn->setObjectName(QStringLiteral("exportAdjustedButton"));
-    m_exportAdjustedBtn->setToolTip(
+    d->exportAdjustedBtn =
+        new QPushButton(tr("Export adjusted result for this image..."), d->editPanel);
+    d->exportAdjustedBtn->setObjectName(QStringLiteral("exportAdjustedButton"));
+    d->exportAdjustedBtn->setToolTip(
         tr("Export current pane at full resolution with brightness/contrast/gamma, white balance, "
            "USM, rotate/flip, and crop applied, "
            "as PNG or TIFF without overwriting the original"));
-    connect(m_exportAdjustedBtn, &QPushButton::clicked, this,
+    connect(d->exportAdjustedBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportCurrentCellAdjusted);
-    editLay->addWidget(m_exportAdjustedBtn);
+    editLay->addWidget(d->exportAdjustedBtn);
 }
 
 void CompareWorkspace::trackCellPointerForExportMenu(int idx, QEvent *event)

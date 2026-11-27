@@ -60,7 +60,7 @@ void CompareWorkspace::flushDeferredCompareAnalysis()
     m_deferredHistRefresh = false;
     if (wantDiff)
         refreshAllDiffOverlays();
-    if (wantHist && m_sidePanel && m_sidePanel->isVisible())
+    if (wantHist && d->sidePanel && d->sidePanel->isVisible())
         refreshHistograms();
 }
 
@@ -212,7 +212,7 @@ bool CompareWorkspace::finishLoadInPlaceIfPossible(
     if (!mviewer::ui::canReuseComparePanes(prevPanes, kept))
         return false;
 
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool blinkActive = d->blinkChk && d->blinkChk->isChecked();
     if (blinkActive)
         return false;
 

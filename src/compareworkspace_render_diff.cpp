@@ -568,7 +568,7 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
 
     noteSuggestedThreshold(r.hasSuggestedThreshold, static_cast<int>(r.suggestedThreshold));
 
-    if (m_metricLabel)
+    if (d->metricLabel)
     {
         QString text;
         if (!r.metricsValid)
@@ -610,10 +610,10 @@ void CompareWorkspace::setAutoAlignBeforeDiff(bool on)
 {
     // Single in-memory owner for the preference: the compare toolbar
     // checkbox and Preferences both route here, so they never drift.
-    if (m_autoAlignChk && m_autoAlignChk->isChecked() != on)
+    if (d->autoAlignChk && d->autoAlignChk->isChecked() != on)
     {
-        const QSignalBlocker blocker(m_autoAlignChk);
-        m_autoAlignChk->setChecked(on);
+        const QSignalBlocker blocker(d->autoAlignChk);
+        d->autoAlignChk->setChecked(on);
     }
     if (m_sessionState)
         m_sessionState->setAutoAlignBeforeDiff(on);

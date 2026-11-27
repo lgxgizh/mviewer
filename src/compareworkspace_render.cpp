@@ -48,14 +48,14 @@ QSize fallbackFrameSize(const ImageFrame *img)
 // own wheel/drag input while a canvas mode is active.
 QStackedLayout *CompareWorkspace::buildCanvasPage()
 {
-    m_compareGridPage = new QWidget(this);
-    m_compareGridPage->setObjectName("compareGridPage");
-    auto *gridLay = new QVBoxLayout(m_compareGridPage);
+    d->compareGridPage = new QWidget(this);
+    d->compareGridPage->setObjectName("compareGridPage");
+    auto *gridLay = new QVBoxLayout(d->compareGridPage);
     gridLay->setContentsMargins(0, 0, 0, 0);
 
-    auto *scroll = new QScrollArea(m_compareGridPage);
+    auto *scroll = new QScrollArea(d->compareGridPage);
     scroll->setWidgetResizable(true);
-    scroll->setWidget(m_grid);
+    scroll->setWidget(d->grid);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -72,31 +72,31 @@ QStackedLayout *CompareWorkspace::buildCanvasPage()
     // Keep async Compare startup explicit. A non-modal page avoids showing an
     // empty/black grid while the whole batch is still decoding; the
     // indeterminate bar intentionally does not imply per-pane progress.
-    m_compareLoadingPage = new QWidget(this);
-    m_compareLoadingPage->setObjectName("compareLoadingPage");
-    auto *loadingLay = new QVBoxLayout(m_compareLoadingPage);
+    d->compareLoadingPage = new QWidget(this);
+    d->compareLoadingPage->setObjectName("compareLoadingPage");
+    auto *loadingLay = new QVBoxLayout(d->compareLoadingPage);
     loadingLay->setContentsMargins(24, 24, 24, 24);
     loadingLay->setSpacing(12);
     loadingLay->addStretch(1);
-    m_compareLoadingLabel = new QLabel(tr("Loading comparison images…"), m_compareLoadingPage);
-    m_compareLoadingLabel->setObjectName("compareLoadingLabel");
-    m_compareLoadingLabel->setAlignment(Qt::AlignCenter);
-    loadingLay->addWidget(m_compareLoadingLabel);
-    m_compareLoadingProgress = new QProgressBar(m_compareLoadingPage);
-    m_compareLoadingProgress->setObjectName("compareLoadingProgress");
-    m_compareLoadingProgress->setRange(0, 0);
-    m_compareLoadingProgress->setTextVisible(false);
-    m_compareLoadingProgress->setFixedWidth(280);
-    loadingLay->addWidget(m_compareLoadingProgress, 0, Qt::AlignHCenter);
+    d->compareLoadingLabel = new QLabel(tr("Loading comparison images…"), d->compareLoadingPage);
+    d->compareLoadingLabel->setObjectName("compareLoadingLabel");
+    d->compareLoadingLabel->setAlignment(Qt::AlignCenter);
+    loadingLay->addWidget(d->compareLoadingLabel);
+    d->compareLoadingProgress = new QProgressBar(d->compareLoadingPage);
+    d->compareLoadingProgress->setObjectName("compareLoadingProgress");
+    d->compareLoadingProgress->setRange(0, 0);
+    d->compareLoadingProgress->setTextVisible(false);
+    d->compareLoadingProgress->setFixedWidth(280);
+    loadingLay->addWidget(d->compareLoadingProgress, 0, Qt::AlignHCenter);
     loadingLay->addStretch(1);
 
-    m_pageStack = new QStackedLayout;
-    m_pageStack->setContentsMargins(0, 0, 0, 0);
-    m_pageStack->addWidget(m_compareGridPage);
-    m_pageStack->addWidget(m_compareCanvas);
-    m_pageStack->addWidget(m_compareLoadingPage);
-    m_pageStack->setCurrentWidget(m_compareGridPage);
-    return m_pageStack;
+    d->pageStack = new QStackedLayout;
+    d->pageStack->setContentsMargins(0, 0, 0, 0);
+    d->pageStack->addWidget(d->compareGridPage);
+    d->pageStack->addWidget(m_compareCanvas);
+    d->pageStack->addWidget(d->compareLoadingPage);
+    d->pageStack->setCurrentWidget(d->compareGridPage);
+    return d->pageStack;
 }
 
 // Central page transition: canvas modes (split / swipe / overlay / checker) are
@@ -107,31 +107,31 @@ void CompareWorkspace::updateCanvasModeVisibility()
     // Canvas-mode transitions are semantic presentation changes. A transient
     // A<-B hold must never survive a mode switch into a different renderer.
     endTemporaryCompare();
-    if (!m_pageStack || !m_compareCanvas || !m_compareGridPage || !m_compareLoadingPage)
+    if (!d->pageStack || !m_compareCanvas || !d->compareGridPage || !d->compareLoadingPage)
         return;
     // Soft keep-grid: only blank to the loading page when there is no prior
     // pair to keep on screen. Pair navigation keeps the grid/canvas visible.
     if (m_loadInFlight && m_engine.imageCount() == 0)
     {
-        m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        d->pageStack->setCurrentWidget(d->compareLoadingPage);
         update();
         return;
     }
     if (m_engine.imageCount() == 0)
     {
-        if (m_compareLoadingProgress)
-            m_compareLoadingProgress->setVisible(false);
-        m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        if (d->compareLoadingProgress)
+            d->compareLoadingProgress->setVisible(false);
+        d->pageStack->setCurrentWidget(d->compareLoadingPage);
         update();
         return;
     }
     const bool canvasMode = m_engine.imageCount() == 2 && anyCanvasCompareMode();
     QWidget *target = canvasMode ? static_cast<QWidget *>(m_compareCanvas)
-                                 : static_cast<QWidget *>(m_compareGridPage);
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+                                 : static_cast<QWidget *>(d->compareGridPage);
+    const bool blinkActive = d->blinkChk && d->blinkChk->isChecked();
     const bool switchedToGrid =
-        !canvasMode && !blinkActive && m_pageStack->currentWidget() != target;
-    m_pageStack->setCurrentWidget(target);
+        !canvasMode && !blinkActive && d->pageStack->currentWidget() != target;
+    d->pageStack->setCurrentWidget(target);
     if (switchedToGrid)
         schedulePostLayoutFit();
     if (canvasMode)
@@ -512,7 +512,7 @@ double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
 
 void CompareWorkspace::reapplyFitPreservingRatio()
 {
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool blinkActive = d->blinkChk && d->blinkChk->isChecked();
     if (!m_syncZoom && !blinkActive)
         return;
     const int n = m_engine.imageCount();
@@ -570,7 +570,7 @@ void CompareWorkspace::schedulePreserveFit()
                            if (!ws)
                                return;
                            ws->m_preserveFitPending = false;
-                           if (!(ws->m_blinkChk && ws->m_blinkChk->isChecked()))
+                           if (!(ws->d->blinkChk && ws->d->blinkChk->isChecked()))
                                return;
                            ws->reapplyFitPreservingRatio();
                        });
@@ -612,9 +612,9 @@ void CompareWorkspace::schedulePostLayoutFit()
             // capture transient/invalid pane geometry. The
             // Canvas -> Grid transition above queues a fresh
             // fit after the grid becomes current again.
-            const bool blinkActive = ws->m_blinkChk && ws->m_blinkChk->isChecked();
-            if (blinkActive || (ws->m_pageStack && ws->m_compareGridPage &&
-                                ws->m_pageStack->currentWidget() != ws->m_compareGridPage))
+            const bool blinkActive = ws->d->blinkChk && ws->d->blinkChk->isChecked();
+            if (blinkActive || (ws->d->pageStack && ws->d->compareGridPage &&
+                                ws->d->pageStack->currentWidget() != ws->d->compareGridPage))
                 return;
             const double requestedScale = ws->m_engine.syncTransform().scale;
             const double requestedRatio = ws->m_sharedZoomRatio;

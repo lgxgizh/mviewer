@@ -128,7 +128,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide ||
          event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
          event->type() == QEvent::EnabledChange) &&
-        (obj == this || obj == m_temporaryCompareButton || obj == window()))
+        (obj == this || obj == d->temporaryCompareButton || obj == window()))
         endTemporaryCompare();
 
     // M34: the dedicated compareCanvas owns its own input while a canvas mode
@@ -141,7 +141,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     if (view && forwardFocusedCompareKey(event))
         return true;
     const int idx = view ? view->cellIndex() : -1;
-    if (view && event && event->type() == QEvent::Resize && m_blinkChk && m_blinkChk->isChecked())
+    if (view && event && event->type() == QEvent::Resize && d->blinkChk && d->blinkChk->isChecked())
         schedulePreserveFit();
     if (idx < 0 || idx >= m_cellViews.size())
         return QWidget::eventFilter(obj, event);
@@ -210,7 +210,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
         if (me->button() == Qt::LeftButton)
         {
             // A-4.3: in Pixel Link mode, click places a shared image-space marker.
-            if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && idx >= 0 &&
+            if (d->pixelLinkChk && d->pixelLinkChk->isChecked() && idx >= 0 &&
                 idx < m_cellViews.size() && m_cellViews[idx])
             {
                 const QPointF imgPt = m_cellViews[idx]->widgetToImage(me->pos());
@@ -305,7 +305,7 @@ bool CompareWorkspace::handleCanvasWheel(QEvent *event)
     const int refIdx = canvasRefCellAt(pos);
     double anchorX = pos.x() - cr.width() / 2.0;
     double anchorY = pos.y() - cr.height() / 2.0;
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         const QRectF half = canvasPaneGeometry(refIdx);
         anchorX = pos.x() - (half.x() + half.width() / 2.0);
@@ -498,7 +498,7 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     double anchorX = pos.x() - cr.width() / 2.0;
     double anchorY = pos.y() - cr.height() / 2.0;
     int refCell = 0;
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         const int midX = cr.width() / 2;
         const bool left = pos.x() < midX;
@@ -578,16 +578,16 @@ bool CompareWorkspace::canvasEventFilter(QEvent *event)
 int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
 {
     const QRect cr = canvasRect();
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
         return pos.x() < cr.width() / 2 ? 0 : 1;
     if (m_swipeChk && m_swipeChk->isChecked())
         return pos.x() < int(cr.width() * m_splitPos) ? 0 : 1;
-    if (m_checkerChk && m_checkerChk->isChecked())
+    if (d->checkerChk && d->checkerChk->isChecked())
     {
         const int bs = std::max(4, m_checkerSize);
         return (((pos.x() / bs) + (pos.y() / bs)) & 1) != 0 ? 1 : 0;
     }
-    if (m_overlayChk && m_overlayChk->isChecked())
+    if (d->overlayChk && d->overlayChk->isChecked())
         return (QApplication::keyboardModifiers() & Qt::AltModifier) ? 0 : 1;
     return 0;
 }
@@ -712,7 +712,7 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
 QRectF CompareWorkspace::canvasPaneGeometry(int pane) const
 {
     const QRect canvas = canvasRect();
-    if (m_splitChk && m_splitChk->isChecked())
+    if (d->splitChk && d->splitChk->isChecked())
     {
         const auto halves = splitRects(canvas);
         return pane == 1 ? QRectF(halves.second) : QRectF(halves.first);

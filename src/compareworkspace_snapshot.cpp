@@ -164,7 +164,7 @@ QPixmap CompareWorkspace::grabComparisonView()
     if (m_compareCanvas && m_compareCanvas->isVisible())
         target = m_compareCanvas;
     else
-        target = m_compareGridPage;
+        target = d->compareGridPage;
     if (!target)
         target = this;
     // WYSIWYG: grab the workspace over the page's rectangle instead of the page
@@ -178,8 +178,8 @@ QPixmap CompareWorkspace::grabComparisonView()
         return captured;
 
     SnapshotAnnotations a;
-    a.modeText = snapshotModeText(m_splitChk, m_swipeChk, m_overlayChk, m_checkerChk,
-                                  m_diffHighlightChk, m_blinkChk);
+    a.modeText = snapshotModeText(d->splitChk, m_swipeChk, d->overlayChk, d->checkerChk,
+                                  d->diffHighlightChk, d->blinkChk);
     a.zoomPercent = anyCanvasCompareMode() && !m_cellViews.isEmpty() && m_cellViews[0]
                         ? static_cast<int>(std::round(displayedScale(0) * 100.0))
                         : snapshotZoomPercent(m_cellViews, m_sharedZoomRatio);
@@ -197,9 +197,9 @@ QPixmap CompareWorkspace::grabComparisonView()
     if (hasAdjust)
         a.compDetail += QStringLiteral("  [Adjusted]");
 
-    if (m_metricLabel && !m_metricLabel->text().isEmpty())
+    if (d->metricLabel && !d->metricLabel->text().isEmpty())
     {
-        a.metricsText = m_metricLabel->text().trimmed();
+        a.metricsText = d->metricLabel->text().trimmed();
         a.metricsText.replace(QLatin1Char('\n'), QStringLiteral("  "));
     }
 

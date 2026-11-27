@@ -47,7 +47,8 @@ void syncSessionStateOnLoad(mviewer::ui::CompareSessionState *state, const QStri
 }
 } // namespace
 
-CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
+CompareWorkspace::CompareWorkspace(QWidget *parent)
+    : QWidget(parent), d(std::make_unique<Private>())
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     m_session = std::make_unique<mviewer::ui::CompareSessionRuntime>();
@@ -71,10 +72,10 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     buildModeControls(modeLayout, viewLayout);
     buildDiffControls(toolLayout);
     buildViewControls(viewLayout);
-    m_grid = new QWidget;
-    m_layout = new QGridLayout(m_grid);
-    m_layout->setSpacing(2);
-    m_layout->setContentsMargins(0, 0, 0, 0);
+    d->grid = new QWidget;
+    d->layout = new QGridLayout(d->grid);
+    d->layout->setSpacing(2);
+    d->layout->setContentsMargins(0, 0, 0, 0);
 
     // M34: the grid scrolls inside "compareGridPage"; a stacked layout swaps it
     // with the dedicated "compareCanvas" widget in split/swipe/overlay/checker
@@ -82,9 +83,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     auto *pages = buildCanvasPage();
 
     // P0 #③: right-side inspector/histogram panel (collapsible).
-    m_sidePanel = new QWidget(this);
-    m_sidePanel->setFixedWidth(280);
-    auto *sideLay = new QVBoxLayout(m_sidePanel);
+    d->sidePanel = new QWidget(this);
+    d->sidePanel->setFixedWidth(280);
+    auto *sideLay = new QVBoxLayout(d->sidePanel);
     sideLay->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
                                 mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     sideLay->setSpacing(mviewer::ui::metrics::kSpace8);
@@ -96,7 +97,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // M16.2: per-cell image edit panel (collapsible section inside side panel)
     buildEditPanel(sideLay);
 
-    m_sidePanel->setVisible(false);
+    d->sidePanel->setVisible(false);
     buildToolbarActions(toolActionsLayout);
     auto *leftLay = new QVBoxLayout;
     leftLay->setContentsMargins(0, 0, 0, 0);
@@ -108,7 +109,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     auto *root = new QHBoxLayout(this);
     root->setSpacing(0);
     root->addLayout(leftLay, 1);
-    root->addWidget(m_sidePanel);
+    root->addWidget(d->sidePanel);
     applyCompareSafeInsets();
     updateActionAvailability();
     updateROIAvailabilityStatus();
@@ -134,13 +135,13 @@ void CompareWorkspace::setupControllerSignals()
                 if (m_thresholdValue != th)
                 {
                     m_thresholdValue = th;
-                    if (m_thresholdSlider && m_thresholdSlider->value() != th)
+                    if (d->thresholdSlider && d->thresholdSlider->value() != th)
                     {
-                        const QSignalBlocker b(m_thresholdSlider);
-                        m_thresholdSlider->setValue(th);
+                        const QSignalBlocker b(d->thresholdSlider);
+                        d->thresholdSlider->setValue(th);
                     }
-                    if (m_thresholdLabel)
-                        m_thresholdLabel->setText(QString::number(th));
+                    if (d->thresholdLabel)
+                        d->thresholdLabel->setText(QString::number(th));
                     refreshAllDiffOverlays();
                 }
             });
@@ -157,26 +158,26 @@ void CompareWorkspace::setupControllerSignals()
     connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::blinkStateChanged, this,
             [this](bool active)
             {
-                if (m_blinkChk && m_blinkChk->isChecked() != active)
-                    m_blinkChk->setChecked(active);
+                if (d->blinkChk && d->blinkChk->isChecked() != active)
+                    d->blinkChk->setChecked(active);
             });
     connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::uniformScaleToggled, this,
             [this](bool on)
             {
-                if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != on)
-                    m_uniformScaleChk->setChecked(on);
+                if (d->uniformScaleChk && d->uniformScaleChk->isChecked() != on)
+                    d->uniformScaleChk->setChecked(on);
             });
     connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncZoomToggled, this,
             [this](bool on)
             {
-                if (m_syncZoomChk && m_syncZoomChk->isChecked() != on)
-                    m_syncZoomChk->setChecked(on);
+                if (d->syncZoomChk && d->syncZoomChk->isChecked() != on)
+                    d->syncZoomChk->setChecked(on);
             });
     connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncDragToggled, this,
             [this](bool on)
             {
-                if (m_syncDragChk && m_syncDragChk->isChecked() != on)
-                    m_syncDragChk->setChecked(on);
+                if (d->syncDragChk && d->syncDragChk->isChecked() != on)
+                    d->syncDragChk->setChecked(on);
             });
 }
 
@@ -256,8 +257,8 @@ CompareWorkspace::~CompareWorkspace()
     m_interactionBusy = false;
     m_deferredDiffRefresh = false;
     m_deferredHistRefresh = false;
-    if (m_blinkTimer)
-        m_blinkTimer->stop();
+    if (d->blinkTimer)
+        d->blinkTimer->stop();
     // Drop shared ImageFrames before cancelAsync waits out in-flight
     // deliveries, so the ~384 MiB session retain is not held for that drain.
     releaseSessionMemory();
@@ -343,14 +344,14 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
         if (c && c != keepOn && c->isChecked())
             c->setChecked(false);
     };
-    uncheck(m_splitChk);
+    uncheck(d->splitChk);
     uncheck(m_swipeChk);
-    uncheck(m_overlayChk);
-    uncheck(m_checkerChk);
+    uncheck(d->overlayChk);
+    uncheck(d->checkerChk);
     // Blink and the dedicated canvas modes render through different surfaces.
     // Keeping both checked would leave the canvas visible while Blink only
     // toggles the hidden grid panes, so they must be mutually exclusive too.
-    uncheck(m_blinkChk);
+    uncheck(d->blinkChk);
 }
 
 void CompareWorkspace::setImages(const QStringList &paths)
@@ -421,8 +422,8 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         // Publish loading state before queueing any probe. Soft keep-grid:
         // when panes already show a prior pair, keep them visible (stale-
         // while-revalidate) instead of blanking to the full-page spinner.
-        if (m_compareLoadingLabel)
-            m_compareLoadingLabel->setText(tr("Loading %1 images…").arg(requested));
+        if (d->compareLoadingLabel)
+            d->compareLoadingLabel->setText(tr("Loading %1 images…").arg(requested));
         const bool softKeepGrid = m_engine.imageCount() > 0;
         m_softPairReload = softKeepGrid;
         if (softKeepGrid)
@@ -432,13 +433,13 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         }
         else
         {
-            if (m_compareLoadingProgress)
+            if (d->compareLoadingProgress)
             {
-                m_compareLoadingProgress->setRange(0, 0);
-                m_compareLoadingProgress->setVisible(true);
+                d->compareLoadingProgress->setRange(0, 0);
+                d->compareLoadingProgress->setVisible(true);
             }
-            if (m_pageStack && m_compareLoadingPage)
-                m_pageStack->setCurrentWidget(m_compareLoadingPage);
+            if (d->pageStack && d->compareLoadingPage)
+                d->pageStack->setCurrentWidget(d->compareLoadingPage);
         }
         update();
     }
@@ -505,11 +506,11 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
         m_session->displayIsPreview.clear();
         mviewer::core::releaseDisplayResampleCache();
     }
-    if (m_compareLoadingProgress)
-        m_compareLoadingProgress->setVisible(false);
-    if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
+    if (d->compareLoadingProgress)
+        d->compareLoadingProgress->setVisible(false);
+    if (m_engine.imageCount() == 0 && d->compareLoadingLabel)
     {
-        m_compareLoadingLabel->setText(
+        d->compareLoadingLabel->setText(
             failedCount > 0 ? tr("No images available.\nCheck that the files exist, are complete, "
                                  "and are supported.")
                             : tr("No images available.\nReturn to Browse and select images."));
@@ -539,15 +540,15 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     syncEditCellAfterLoad();
     schedulePostLayoutFit();
     update();
-    if (m_sidePanel && m_sidePanel->isVisible())
+    if (d->sidePanel && d->sidePanel->isVisible())
         refreshHistograms();
 
     // P0-4 / A-4.1 / M23: split, swipe, overlay and checkerboard only make sense
     // for exactly two images, and so does blink (see the TU for the blink case).
     disarmSingleImageModes();
     updateActionAvailability();
-    if (m_grid && m_engine.imageCount() != 2)
-        m_grid->setVisible(true);
+    if (d->grid && m_engine.imageCount() != 2)
+        d->grid->setVisible(true);
     updateCanvasModeVisibility();
     updateTemporaryCompareAvailability();
     updateLayoutStatus();
@@ -605,8 +606,8 @@ void CompareWorkspace::setSyncEnabled(bool on)
 {
     m_syncZoom = on;
     m_syncDrag = on;
-    m_syncZoomChk->setChecked(on);
-    m_syncDragChk->setChecked(on);
+    d->syncZoomChk->setChecked(on);
+    d->syncDragChk->setChecked(on);
     m_engine.setSyncMode(on, on);
 }
 
@@ -617,7 +618,7 @@ void CompareWorkspace::setSyncEnabled(bool on)
 
 void CompareWorkspace::updateFrameControl()
 {
-    if (!m_frameLabel || !m_frameSpin)
+    if (!d->frameLabel || !d->frameSpin)
         return;
     int index = m_editIdx;
     if (index < 0)
@@ -627,13 +628,13 @@ void CompareWorkspace::updateFrameControl()
     const ImageFrame *frame = m_engine.imageAt(index);
     const bool multi = frame && frame->sequenceInfo().frameCount > 1;
     const int count = multi ? frame->sequenceInfo().frameCount : 1;
-    const QSignalBlocker blocker(m_frameSpin);
-    m_frameLabel->setVisible(multi);
-    m_frameSpin->setVisible(multi);
-    m_frameSpin->setEnabled(multi);
-    m_frameSpin->setRange(1, count);
+    const QSignalBlocker blocker(d->frameSpin);
+    d->frameLabel->setVisible(multi);
+    d->frameSpin->setVisible(multi);
+    d->frameSpin->setEnabled(multi);
+    d->frameSpin->setRange(1, count);
     if (multi)
-        m_frameSpin->setValue(std::clamp(frame->frameIndex() + 1, 1, count));
+        d->frameSpin->setValue(std::clamp(frame->frameIndex() + 1, 1, count));
 }
 
 void CompareWorkspace::onFrameControlChanged(int oneBasedIndex)
@@ -710,18 +711,18 @@ bool CompareWorkspace::stepFrameSync(int delta)
 
 void CompareWorkspace::updateLayoutStatus()
 {
-    if (!m_layoutStatusLabel)
+    if (!d->layoutStatusLabel)
         return;
     const auto layout = m_engine.layout();
-    m_layoutStatusLabel->setText(
+    d->layoutStatusLabel->setText(
         tr("%1 × %2", "compare grid rows × columns").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)
 {
-    if (!m_sidePanel)
+    if (!d->sidePanel)
         return;
-    m_sidePanel->setVisible(on);
+    d->sidePanel->setVisible(on);
     if (on)
     {
         refreshHistograms();
@@ -738,16 +739,16 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     const bool locking = newFocus >= 0;
 
     m_focusIndex = newFocus;
-    if (m_focusBtn)
+    if (d->focusBtn)
     {
         // Sync the button without emitting toggled: the button's toggled handler
         // re-enters onFocusRequested and would immediately clear/replace the
         // requested focus (visible when a pane double-click drives this path).
-        const QSignalBlocker blocker(m_focusBtn);
-        m_focusBtn->setChecked(locking);
+        const QSignalBlocker blocker(d->focusBtn);
+        d->focusBtn->setChecked(locking);
     }
-    if (m_focusLabel)
-        m_focusLabel->setText(locking ? tr("Reference: %1").arg(newFocus + 1) : tr("Reference: —"));
+    if (d->focusLabel)
+        d->focusLabel->setText(locking ? tr("Reference: %1").arg(newFocus + 1) : tr("Reference: —"));
 
     // Resolve the actual compared pane before updating the global SelectionModel.
     // The navigation pool may contain images not present in a non-contiguous pair.
@@ -769,7 +770,7 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
 
     // Recompute all diff overlays against the new base (async batch, latest-wins).
     refreshAllDiffOverlays();
-    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
+    if (d->sidePanel && d->sidePanel->isVisible() && m_lastInspectX >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
     update();
 }

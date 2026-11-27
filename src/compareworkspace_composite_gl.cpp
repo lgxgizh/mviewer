@@ -1,5 +1,6 @@
 #include "compareworkspace_composite_gl.h"
 #include "compareworkspace_composite_gl_upload.h"
+#include "compareworkspace_p.h"
 
 #include <QObject>
 #include <QOffscreenSurface>

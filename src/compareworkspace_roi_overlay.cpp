@@ -91,15 +91,15 @@ void placeROIChip(QLabel *chip, const QString &text, const QRect &roi, const QRe
 void CompareWorkspace::updateROISurfaces()
 {
     updateROIAvailabilityStatus();
-    if (m_copyRoiBtn)
-        m_copyRoiBtn->setEnabled(m_roiResult.has_value() && m_roiTable &&
-                                 m_roiTable->rowCount() > 0);
+    if (d->copyRoiBtn)
+        d->copyRoiBtn->setEnabled(m_roiResult.has_value() && d->roiTable &&
+                                 d->roiTable->rowCount() > 0);
     // The aggregated corner HUD is no longer the readout. Per-pane chips sit
     // beside each selection; the full table stays in the analysis panel.
-    if (m_roiHud)
+    if (d->roiHud)
     {
-        m_roiHud->setVisible(false);
-        m_roiHud->setToolTip(tr("Full statistics are in the Inspector panel; R/G, B/G, and H/S/V "
+        d->roiHud->setVisible(false);
+        d->roiHud->setToolTip(tr("Full statistics are in the Inspector panel; R/G, B/G, and H/S/V "
                                 "are shown beside each pane's selection."));
     }
     positionROIHud();
@@ -111,7 +111,7 @@ void CompareWorkspace::positionROIHud()
     // numbers, the anchor and the visibility all come from displayedImageIndex.
     const int paneCount = std::min(m_engine.imageCount(), static_cast<int>(m_cellViews.size()));
     const bool canvas = m_compareCanvas && m_compareCanvas->isVisible();
-    const bool split = canvas && m_splitChk && m_splitChk->isChecked();
+    const bool split = canvas && d->splitChk && d->splitChk->isChecked();
     const bool canvasHold = canvas && m_canvasTemporaryPane >= 0;
     for (int index = 0; index < 8; ++index)
     {

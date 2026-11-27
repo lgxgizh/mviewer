@@ -20,10 +20,10 @@ QImage CompareWorkspace::compositeCanvasWithGl(const QByteArray &cacheKey, const
     if (!m_compositeGl)
         m_compositeGl = std::make_unique<mviewer::ui::CompareCompositeGL>();
 
-    const bool split = m_splitChk && m_splitChk->isChecked();
+    const bool split = d->splitChk && d->splitChk->isChecked();
     const bool swipe = m_swipeChk && m_swipeChk->isChecked();
-    const bool overlay = m_overlayChk && m_overlayChk->isChecked();
-    const bool checker = m_checkerChk && m_checkerChk->isChecked();
+    const bool overlay = d->overlayChk && d->overlayChk->isChecked();
+    const bool checker = d->checkerChk && d->checkerChk->isChecked();
     if ((!split && !swipe && !overlay && !checker) || m_canvasTemporaryPane >= 0)
         return QImage(); // no canvas mode, or a held pane: keep the CPU path
 

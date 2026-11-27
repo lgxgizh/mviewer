@@ -385,7 +385,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
 
 void CompareWorkspace::presentDiffMetrics(const QString &text)
 {
-    if (!m_metricLabel)
+    if (!d->metricLabel)
         return;
     // Keep the full metric text in the label (reports and tests read it); a
     // fixed maximum width clips the chip visually instead of eliding text, so
@@ -393,23 +393,23 @@ void CompareWorkspace::presentDiffMetrics(const QString &text)
     // on platforms with wider fonts.
     QString chip = text;
     chip.replace(QLatin1Char('\n'), QStringLiteral(" · "));
-    m_metricLabel->setWordWrap(false);
-    m_metricLabel->setMaximumWidth(480);
-    if (!m_metricLabel->property("tabularDigits").toBool())
+    d->metricLabel->setWordWrap(false);
+    d->metricLabel->setMaximumWidth(480);
+    if (!d->metricLabel->property("tabularDigits").toBool())
     {
         // System UI font with tabular figures so PSNR/SSIM digits do not jitter
         // as values change (replaces the old monospace accent readout).
-        QFont font = m_metricLabel->font();
+        QFont font = d->metricLabel->font();
         font.setPixelSize(mviewer::ui::metrics::kFontCaptionPx);
         font.setWeight(QFont::DemiBold);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         font.setFeature(QFont::Tag("tnum"), 1);
 #endif
-        m_metricLabel->setFont(font);
-        m_metricLabel->setProperty("tabularDigits", true);
+        d->metricLabel->setFont(font);
+        d->metricLabel->setProperty("tabularDigits", true);
     }
-    m_metricLabel->setToolTip(text);
-    m_metricLabel->setText(chip);
+    d->metricLabel->setToolTip(text);
+    d->metricLabel->setText(chip);
 }
 
 void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, QWidget *&syncButton,
@@ -418,28 +418,28 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     auto *sync = makePopup(viewBar, "compareSyncButton", tr("Sync"),
                            tr("Sync zoom (Z), sync drag (D), sync rotate (Alt+R), sync crosshair"
                               " (R), pixel link (L), Uniform Pixel Scale"));
-    bindMirror(sync->menu(), m_syncZoomChk, "syncZoomAction");
-    bindMirror(sync->menu(), m_syncDragChk, "syncDragAction");
-    bindMirror(sync->menu(), m_syncRotateChk, "syncRotateAction");
-    bindMirror(sync->menu(), m_crosshairChk, "syncCrosshairAction");
-    bindMirror(sync->menu(), m_pixelLinkChk, "pixelLinkAction");
-    bindMirror(sync->menu(), m_uniformScaleChk, "uniformScaleAction");
+    bindMirror(sync->menu(), d->syncZoomChk, "syncZoomAction");
+    bindMirror(sync->menu(), d->syncDragChk, "syncDragAction");
+    bindMirror(sync->menu(), d->syncRotateChk, "syncRotateAction");
+    bindMirror(sync->menu(), d->crosshairChk, "syncCrosshairAction");
+    bindMirror(sync->menu(), d->pixelLinkChk, "pixelLinkAction");
+    bindMirror(sync->menu(), d->uniformScaleChk, "uniformScaleAction");
     syncButton = sync;
 
     auto *adjust = makePopup(viewBar, "compareAdjustButton", tr("Adjust"),
                              tr("Brightness, contrast, gamma, gain, USM sharpening, rotation and "
                                 "flip (preview only, does not overwrite the original file);"
                                 " adjusted result can be exported"));
-    if (m_editPanel && adjust->menu())
+    if (d->editPanel && adjust->menu())
     {
-        lift(m_editPanel);
-        m_editPanel->setParent(adjust);
-        m_editPanel->setMinimumWidth(260);
+        lift(d->editPanel);
+        d->editPanel->setParent(adjust);
+        d->editPanel->setMinimumWidth(260);
         auto *adjustAction = new QWidgetAction(adjust);
-        adjustAction->setDefaultWidget(m_editPanel);
+        adjustAction->setDefaultWidget(d->editPanel);
         adjust->menu()->addAction(adjustAction);
-        keepFindable(adjust->menu(), m_editPanel);
-        showWithMenu(adjust->menu(), m_editPanel);
+        keepFindable(adjust->menu(), d->editPanel);
+        showWithMenu(adjust->menu(), d->editPanel);
     }
     adjustButton = adjust;
 
@@ -450,19 +450,19 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     auto *moreLay = new QVBoxLayout(morePanel);
     moreLay->setContentsMargins(8, 8, 8, 8);
     moreLay->setSpacing(mviewer::ui::metrics::kSpace8);
-    park(moreLay, m_savePresetBtn, true);
-    park(moreLay, m_loadPresetBtn, true);
-    park(moreLay, m_autoAlignChk, true);
-    park(moreLay, m_focusBtn, true);
-    park(moreLay, m_focusLabel, true);
-    park(moreLay, m_clearLinksBtn, true);
-    park(moreLay, m_linkInfoLabel, true);
-    park(moreLay, m_paneHistOverlayChk, true);
-    park(moreLay, m_filenameOverlayChk, true);
-    park(moreLay, m_swapBtn, true);
-    park(moreLay, m_diffOverlayChk, true);
-    park(moreLay, m_frameLabel, false);
-    park(moreLay, m_frameSpin, false);
+    park(moreLay, d->savePresetBtn, true);
+    park(moreLay, d->loadPresetBtn, true);
+    park(moreLay, d->autoAlignChk, true);
+    park(moreLay, d->focusBtn, true);
+    park(moreLay, d->focusLabel, true);
+    park(moreLay, d->clearLinksBtn, true);
+    park(moreLay, d->linkInfoLabel, true);
+    park(moreLay, d->paneHistOverlayChk, true);
+    park(moreLay, d->filenameOverlayChk, true);
+    park(moreLay, d->swapBtn, true);
+    park(moreLay, d->diffOverlayChk, true);
+    park(moreLay, d->frameLabel, false);
+    park(moreLay, d->frameSpin, false);
     if (more->menu())
     {
         auto *moreAction = new QWidgetAction(more);
@@ -503,8 +503,8 @@ void CompareWorkspace::regroupCompareChrome()
     clearLayout(toolLay);
     clearLayout(navLay);
 
-    const QList<QCheckBox *> modes = {m_blinkChk,   m_splitChk,   m_swipeChk,
-                                      m_overlayChk, m_checkerChk, m_diffHighlightChk};
+    const QList<QCheckBox *> modes = {d->blinkChk,   d->splitChk,   m_swipeChk,
+                                      d->overlayChk, d->checkerChk, d->diffHighlightChk};
     QWidget *modeBar = findChild<QWidget *>(QStringLiteral("compareModeToolbar"));
     QWidget *segment = makeModeSegment(modeBar);
     auto *segmentLay = qobject_cast<QHBoxLayout *>(segment->layout());
@@ -518,49 +518,49 @@ void CompareWorkspace::regroupCompareChrome()
         box->setVisible(true);
     }
     modeLay->addWidget(segment);
-    placeKept(modeLay, m_overlayAlphaSlider);
-    placeKept(modeLay, m_overlayAlphaLabel);
-    placeKept(modeLay, m_checkerSizeSlider);
-    placeKept(modeLay, m_checkerSizeLabel);
+    placeKept(modeLay, d->overlayAlphaSlider);
+    placeKept(modeLay, d->overlayAlphaLabel);
+    placeKept(modeLay, d->checkerSizeSlider);
+    placeKept(modeLay, d->checkerSizeLabel);
     placeKept(modeLay, findChild<QLabel *>(QStringLiteral("diffThresholdCaption")));
-    placeKept(modeLay, m_thresholdSlider);
-    placeKept(modeLay, m_thresholdLabel);
-    placeKept(modeLay, m_autoThresholdBtn);
+    placeKept(modeLay, d->thresholdSlider);
+    placeKept(modeLay, d->thresholdLabel);
+    placeKept(modeLay, d->autoThresholdBtn);
     placeKept(modeLay, findChild<QLabel *>(QStringLiteral("diffGainCaption")));
-    placeKept(modeLay, m_diffGainCombo);
+    placeKept(modeLay, d->diffGainCombo);
 
-    if (m_layoutCombo)
+    if (d->layoutCombo)
     {
-        m_layoutCombo->setToolTip(tr("Layout: Auto / 1×N / 2×2 … (Ctrl+2 / Ctrl+4 / Ctrl+8)"));
-        m_layoutCombo->setFixedHeight(mviewer::ui::metrics::kControlHeight);
+        d->layoutCombo->setToolTip(tr("Layout: Auto / 1×N / 2×2 … (Ctrl+2 / Ctrl+4 / Ctrl+8)"));
+        d->layoutCombo->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     }
     place(viewLay, syncButton, true);
     place(viewLay, findChild<QPushButton *>(QStringLiteral("fitWindowButton")), true);
     place(viewLay, layoutLabel, true);
-    place(viewLay, m_layoutCombo, true);
+    place(viewLay, d->layoutCombo, true);
     placeKept(viewLay, findChild<QLabel *>(QStringLiteral("compareColumnsCaption")));
-    placeKept(viewLay, m_gridColsSpin);
-    place(viewLay, m_layoutStatusLabel, true);
-    place(viewLay, m_channelCombo, true);
+    placeKept(viewLay, d->gridColsSpin);
+    place(viewLay, d->layoutStatusLabel, true);
+    place(viewLay, d->channelCombo, true);
     place(viewLay, adjustButton, true);
 
     place(toolLay, findChild<QToolButton *>(QStringLiteral("compareSnapshotButton")), true);
-    place(toolLay, m_analyzeBtn, true);
-    place(toolLay, m_exportReportBtn, true);
+    place(toolLay, d->analyzeBtn, true);
+    place(toolLay, d->exportReportBtn, true);
     place(toolLay, moreButton, true);
-    place(toolLay, m_sideChk, true);
+    place(toolLay, d->sideChk, true);
 
     makeCapsule(qobject_cast<QToolButton *>(syncButton));
     makeCapsule(qobject_cast<QToolButton *>(adjustButton));
     makeCapsule(qobject_cast<QToolButton *>(moreButton));
     makeCapsule(findChild<QToolButton *>(QStringLiteral("compareSnapshotButton")));
 
-    place(navLay, m_temporaryCompareButton, true);
-    place(navLay, m_exitBtn, true);
-    if (m_exitBtn)
+    place(navLay, d->temporaryCompareButton, true);
+    place(navLay, d->exitBtn, true);
+    if (d->exitBtn)
     {
-        m_exitBtn->setProperty("primary", true);
-        repolish(m_exitBtn);
+        d->exitBtn->setProperty("primary", true);
+        repolish(d->exitBtn);
     }
     syncContextualCompareControls();
 }

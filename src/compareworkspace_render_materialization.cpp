@@ -234,9 +234,9 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
     if (state.testFlag(Qt::WindowFullScreen) || state.testFlag(Qt::WindowMaximized))
         applyCompareSafeInsets();
     bindDisplayColorScreen();
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool blinkActive = d->blinkChk && d->blinkChk->isChecked();
     const bool normalGrid =
-        m_pageStack && m_compareGridPage && m_pageStack->currentWidget() == m_compareGridPage;
+        d->pageStack && d->compareGridPage && d->pageStack->currentWidget() == d->compareGridPage;
     if (blinkActive)
     {
         // The active cell stretches across the grid. Refit that geometry but
@@ -275,12 +275,12 @@ void CompareWorkspace::rebuildCells()
     for (RawImageView *view : m_cellViews)
     {
         QWidget *pane = view ? view->parentWidget() : nullptr;
-        if (pane && m_layout->indexOf(pane) < 0)
-            m_layout->addWidget(pane);
+        if (pane && d->layout->indexOf(pane) < 0)
+            d->layout->addWidget(pane);
     }
 
     QLayoutItem *item;
-    while ((item = m_layout->takeAt(0)))
+    while ((item = d->layout->takeAt(0)))
     {
         if (item->widget())
             delete item->widget();
@@ -291,24 +291,24 @@ void CompareWorkspace::rebuildCells()
     m_cellHists.clear();
     m_paneHistCache.clear();
 
-    // Reset stale stretch factors from the previous layout. m_layout is reused
+    // Reset stale stretch factors from the previous layout. d->layout is reused
     // across rebuilds, and QGridLayout keeps row/column stretch even after the
     // widgets are removed — so switching e.g. 2x4 -> 1x2 would leave the empty
     // row/columns still claiming half of the viewport.
-    for (int r = 0; r < m_layout->rowCount(); ++r)
-        m_layout->setRowStretch(r, 0);
-    for (int c = 0; c < m_layout->columnCount(); ++c)
-        m_layout->setColumnStretch(c, 0);
+    for (int r = 0; r < d->layout->rowCount(); ++r)
+        d->layout->setRowStretch(r, 0);
+    for (int c = 0; c < d->layout->columnCount(); ++c)
+        d->layout->setColumnStretch(c, 0);
 
     const int n = m_engine.imageCount();
     // Drop a stale focus lock when the image set shrank.
     if (m_focusIndex >= n)
     {
         m_focusIndex = -1;
-        if (m_focusBtn)
-            m_focusBtn->setChecked(false);
-        if (m_focusLabel)
-            m_focusLabel->setText(tr("Reference: —"));
+        if (d->focusBtn)
+            d->focusBtn->setChecked(false);
+        if (d->focusLabel)
+            d->focusLabel->setText(tr("Reference: —"));
     }
     buildCompareCells(n, m_engine.layout().cols);
 
@@ -332,7 +332,7 @@ void CompareWorkspace::rebuildCells()
         scheduleHistogramRefresh(false, all);
     }
 
-    if (m_blinkTimer && m_blinkTimer->isActive())
+    if (d->blinkTimer && d->blinkTimer->isActive())
     {
         syncEngineBlink();
         applyBlink(m_blinkState);
@@ -387,7 +387,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
     for (int i = 0; i < n; ++i)
     {
         // Image view plus a hidden filename store; visible names use the top overlay.
-        auto *cellWidget = new QWidget(m_grid);
+        auto *cellWidget = new QWidget(d->grid);
         cellWidget->setObjectName(QString("comparePane%1").arg(i));
         cellWidget->setMinimumSize(0, 0);
         cellWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -445,7 +445,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
                     // M30: route the high-frequency hover through the coalescer
                     // so the sync-crosshair pixelInfo + crosshairMoved pair and
                     // rapid hovers render the inspector at most once per turn.
-                    if (m_sidePanel && m_sidePanel->isVisible())
+                    if (d->sidePanel && d->sidePanel->isVisible())
                         requestInspectorUpdate(x, y);
                 });
         connect(view, &RawImageView::selectionChanged, this,
@@ -476,13 +476,13 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
 
         const int row = i / columns;
         const int col = i % columns;
-        m_layout->addWidget(cellWidget, row, col);
+        d->layout->addWidget(cellWidget, row, col);
         // Let every cell expand to fill the available area so image panes (not the
         // widgets' minimum size) are what the grid lays out. Without stretch the
         // grid collapses to the cells' minimum size and fitAll() computes a tiny
         // shared scale, leaving compare panes blank or microscopic.
-        m_layout->setRowStretch(row, 1);
-        m_layout->setColumnStretch(col, 1);
+        d->layout->setRowStretch(row, 1);
+        d->layout->setColumnStretch(col, 1);
     }
 }
 

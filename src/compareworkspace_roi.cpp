@@ -47,71 +47,71 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     roiTitle->setObjectName("roiMeasurementTitle");
     roiHeader->addWidget(roiTitle);
     roiHeader->addStretch(1);
-    m_copyRoiBtn = new QPushButton(tr("Copy"), this);
-    m_copyRoiBtn->setObjectName("copyRoiMeasurementsButton");
-    m_copyRoiBtn->setToolTip(tr("Copy ROI measurement results as TSV"));
-    m_copyRoiBtn->setEnabled(false);
-    connect(m_copyRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::copyROIMeasurements);
-    roiHeader->addWidget(m_copyRoiBtn);
-    m_clearRoiBtn = new QPushButton(tr("Clear ROI"), this);
-    m_clearRoiBtn->setObjectName("clearRoiButton");
-    m_clearRoiBtn->setToolTip(tr("Clear the current ROI"));
-    m_clearRoiBtn->setEnabled(false);
-    connect(m_clearRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::clearROI);
-    roiHeader->addWidget(m_clearRoiBtn);
+    d->copyRoiBtn = new QPushButton(tr("Copy"), this);
+    d->copyRoiBtn->setObjectName("copyRoiMeasurementsButton");
+    d->copyRoiBtn->setToolTip(tr("Copy ROI measurement results as TSV"));
+    d->copyRoiBtn->setEnabled(false);
+    connect(d->copyRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::copyROIMeasurements);
+    roiHeader->addWidget(d->copyRoiBtn);
+    d->clearRoiBtn = new QPushButton(tr("Clear ROI"), this);
+    d->clearRoiBtn->setObjectName("clearRoiButton");
+    d->clearRoiBtn->setToolTip(tr("Clear the current ROI"));
+    d->clearRoiBtn->setEnabled(false);
+    connect(d->clearRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::clearROI);
+    roiHeader->addWidget(d->clearRoiBtn);
     sideLay->addLayout(roiHeader);
 
-    m_roiStatusLabel = new QLabel(this);
-    m_roiStatusLabel->setObjectName("roiStatusLabel");
-    m_roiStatusLabel->setWordWrap(true);
-    m_roiStatusLabel->setStyleSheet(
+    d->roiStatusLabel = new QLabel(this);
+    d->roiStatusLabel->setObjectName("roiStatusLabel");
+    d->roiStatusLabel->setWordWrap(true);
+    d->roiStatusLabel->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
-    sideLay->addWidget(m_roiStatusLabel);
-    m_roiGeometryLabel = new QLabel(tr("ROI: —"), this);
-    m_roiGeometryLabel->setObjectName("roiGeometryLabel");
-    sideLay->addWidget(m_roiGeometryLabel);
+    sideLay->addWidget(d->roiStatusLabel);
+    d->roiGeometryLabel = new QLabel(tr("ROI: —"), this);
+    d->roiGeometryLabel->setObjectName("roiGeometryLabel");
+    sideLay->addWidget(d->roiGeometryLabel);
 
-    m_roiTable = new QTableWidget(this);
-    m_roiTable->setObjectName("roiMeasurementTable");
-    m_roiTable->setColumnCount(11);
-    m_roiTable->setHorizontalHeaderLabels(
+    d->roiTable = new QTableWidget(this);
+    d->roiTable->setObjectName("roiMeasurementTable");
+    d->roiTable->setColumnCount(11);
+    d->roiTable->setHorizontalHeaderLabels(
         {tr("Image"), QStringLiteral("H Mean"), QStringLiteral("S Mean"), QStringLiteral("V Mean"),
          QStringLiteral("R Mean"), QStringLiteral("G Mean"), QStringLiteral("B Mean"),
          QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
-    m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
-    m_roiTable->setTextElideMode(Qt::ElideMiddle);
-    m_roiTable->verticalHeader()->setVisible(false);
-    m_roiTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    d->roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    d->roiTable->setSelectionMode(QAbstractItemView::NoSelection);
+    d->roiTable->setTextElideMode(Qt::ElideMiddle);
+    d->roiTable->verticalHeader()->setVisible(false);
+    d->roiTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int column = 1; column < 10; ++column)
-        m_roiTable->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
-    m_roiTable->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
-    m_roiTable->setMinimumHeight(90);
-    m_roiTable->setMaximumHeight(200);
-    sideLay->addWidget(m_roiTable);
+        d->roiTable->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
+    d->roiTable->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
+    d->roiTable->setMinimumHeight(90);
+    d->roiTable->setMaximumHeight(200);
+    sideLay->addWidget(d->roiTable);
 
-    m_roiDeltaLabel = new QLabel(tr("Delta (B − A): —"), this);
-    m_roiDeltaLabel->setObjectName("roiDeltaLabel");
-    m_roiDeltaLabel->setWordWrap(true);
-    m_roiDeltaLabel->setStyleSheet(
+    d->roiDeltaLabel = new QLabel(tr("Delta (B − A): —"), this);
+    d->roiDeltaLabel->setObjectName("roiDeltaLabel");
+    d->roiDeltaLabel->setWordWrap(true);
+    d->roiDeltaLabel->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
-    sideLay->addWidget(m_roiDeltaLabel);
+    sideLay->addWidget(d->roiDeltaLabel);
 
-    m_roiHud = new QPushButton(this);
-    m_roiHud->setObjectName("roiMeasurementHud");
-    m_roiHud->setCursor(Qt::PointingHandCursor);
-    m_roiHud->setStyleSheet(
+    d->roiHud = new QPushButton(this);
+    d->roiHud->setObjectName("roiMeasurementHud");
+    d->roiHud->setCursor(Qt::PointingHandCursor);
+    d->roiHud->setStyleSheet(
         "QPushButton{background:rgba(0,0,0,140);color:#ffffff;border:1px solid #FFD233;"
         "border-radius:6px;padding:8px;text-align:left;font-size:12px;font-weight:600;}"
         "QPushButton:hover{background:rgba(0,0,0,170);}");
-    m_roiHud->setVisible(false);
-    connect(m_roiHud, &QPushButton::clicked, this,
+    d->roiHud->setVisible(false);
+    connect(d->roiHud, &QPushButton::clicked, this,
             [this]()
             {
-                if (m_sideChk)
-                    m_sideChk->setChecked(true);
+                if (d->sideChk)
+                    d->sideChk->setChecked(true);
             });
 }
 
@@ -276,7 +276,7 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     }
     m_roiTask.reset();
     m_roiResult = result;
-    if (!m_roiTable)
+    if (!d->roiTable)
         return;
 
     std::vector<mviewer::domain::ImageMetadata> paneMetadata;
@@ -287,7 +287,7 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         paneMetadata.push_back(frame ? frame->metadata() : mviewer::domain::ImageMetadata{});
     }
     const mviewer::ui::RoiStatsView view = mviewer::ui::presentRoiStats(result, paneMetadata);
-    m_roiTable->setRowCount(static_cast<int>(view.rows.size()));
+    d->roiTable->setRowCount(static_cast<int>(view.rows.size()));
     for (int row = 0; row < static_cast<int>(view.rows.size()); ++row)
     {
         const auto &statsRow = view.rows[static_cast<size_t>(row)];
@@ -300,11 +300,11 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
                 item->setToolTip(statsRow.nameToolTip);
             if (column == 10)
                 item->setToolTip(statsRow.stateToolTip);
-            m_roiTable->setItem(row, column, item);
+            d->roiTable->setItem(row, column, item);
         }
     }
-    if (m_roiDeltaLabel)
-        m_roiDeltaLabel->setText(view.deltaText);
+    if (d->roiDeltaLabel)
+        d->roiDeltaLabel->setText(view.deltaText);
     if (view.state == mviewer::ui::ROIMeasurementState::Idle)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
     else
@@ -316,12 +316,12 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
 void CompareWorkspace::clearROIStatsDisplay()
 {
     m_roiResult.reset();
-    if (m_roiTable)
-        m_roiTable->setRowCount(0);
-    if (m_roiDeltaLabel)
-        m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
-    if (m_copyRoiBtn)
-        m_copyRoiBtn->setEnabled(false);
+    if (d->roiTable)
+        d->roiTable->setRowCount(0);
+    if (d->roiDeltaLabel)
+        d->roiDeltaLabel->setText(tr("Delta (B − A): —"));
+    if (d->copyRoiBtn)
+        d->copyRoiBtn->setEnabled(false);
 }
 
 void CompareWorkspace::setROIMeasurementState(mviewer::ui::ROIMeasurementState state,
@@ -349,27 +349,27 @@ void CompareWorkspace::updateROIAvailabilityStatus()
         detail = tr("Linked ROI ready — source coordinates");
     else if (detail.isEmpty())
         detail = tr("Source RGB · 8-bit analysis");
-    if (m_roiStatusLabel)
-        m_roiStatusLabel->setText(
+    if (d->roiStatusLabel)
+        d->roiStatusLabel->setText(
             QStringLiteral("%1 — %2").arg(measurementStateText(m_roiState), detail));
-    if (m_clearRoiBtn)
-        m_clearRoiBtn->setEnabled(hasAnyRoi || !m_lastSelection.isEmpty());
+    if (d->clearRoiBtn)
+        d->clearRoiBtn->setEnabled(hasAnyRoi || !m_lastSelection.isEmpty());
 }
 
 void CompareWorkspace::copyROIMeasurements()
 {
-    if (!m_roiTable || m_roiTable->rowCount() == 0)
+    if (!d->roiTable || d->roiTable->rowCount() == 0)
         return;
     QStringList lines;
     QStringList headers;
-    for (int column = 0; column < m_roiTable->columnCount(); ++column)
-        headers << m_roiTable->horizontalHeaderItem(column)->text();
+    for (int column = 0; column < d->roiTable->columnCount(); ++column)
+        headers << d->roiTable->horizontalHeaderItem(column)->text();
     lines << headers.join('\t');
-    for (int row = 0; row < m_roiTable->rowCount(); ++row)
+    for (int row = 0; row < d->roiTable->rowCount(); ++row)
     {
         QStringList cells;
-        for (int column = 0; column < m_roiTable->columnCount(); ++column)
-            cells << (m_roiTable->item(row, column) ? m_roiTable->item(row, column)->text()
+        for (int column = 0; column < d->roiTable->columnCount(); ++column)
+            cells << (d->roiTable->item(row, column) ? d->roiTable->item(row, column)->text()
                                                     : QString());
         lines << cells.join('\t');
     }
@@ -386,7 +386,7 @@ void CompareWorkspace::copyROIMeasurements()
     }
     else
     {
-        for (int row = 0; row < m_roiTable->rowCount(); ++row)
+        for (int row = 0; row < d->roiTable->rowCount(); ++row)
         {
             mviewer::domain::Selection sel;
             if (row < m_cellViews.size() && m_cellViews[row])
@@ -400,8 +400,8 @@ void CompareWorkspace::copyROIMeasurements()
                          .arg(static_cast<qint64>(sel.width) * sel.height);
         }
     }
-    if (m_roiDeltaLabel)
-        lines << m_roiDeltaLabel->text();
+    if (d->roiDeltaLabel)
+        lines << d->roiDeltaLabel->text();
     QApplication::clipboard()->setText(lines.join('\n'));
 }
 
@@ -412,7 +412,7 @@ void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
     // Track the hovered cell so the focus-lock button knows which cell to pin.
     m_hoverIdx = view->cellIndex();
 
-    if (!m_crosshairChk || !m_crosshairChk->isChecked())
+    if (!d->crosshairChk || !d->crosshairChk->isChecked())
         return;
 
     const bool valid = pos.x() >= 0.0 && pos.y() >= 0.0;
@@ -456,6 +456,6 @@ void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
     // Sample every cell at the synced image-space point. M30: route through the
     // coalescer so this crosshair path cannot double-render the inspector that
     // the same hover's pixelInfo signal already requested.
-    if (valid && m_sidePanel && m_sidePanel->isVisible())
+    if (valid && d->sidePanel && d->sidePanel->isVisible())
         requestInspectorUpdate(qRound(pos.x()), qRound(pos.y()));
 }

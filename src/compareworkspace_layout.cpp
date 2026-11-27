@@ -9,7 +9,7 @@
 // Keeps RawImageView instances, display rasters, ROI, and overlays alive.
 void CompareWorkspace::relayoutGridKeepingPanes()
 {
-    if (!m_layout || m_cellViews.isEmpty())
+    if (!d->layout || m_cellViews.isEmpty())
         return;
 
     endTemporaryCompare();
@@ -17,17 +17,17 @@ void CompareWorkspace::relayoutGridKeepingPanes()
     for (RawImageView *view : m_cellViews)
     {
         QWidget *pane = view ? view->parentWidget() : nullptr;
-        if (pane && m_layout->indexOf(pane) < 0)
-            m_layout->addWidget(pane);
+        if (pane && d->layout->indexOf(pane) < 0)
+            d->layout->addWidget(pane);
     }
 
-    while (QLayoutItem *item = m_layout->takeAt(0))
+    while (QLayoutItem *item = d->layout->takeAt(0))
         delete item; // widgets stay owned by their parents
 
-    for (int r = 0; r < m_layout->rowCount(); ++r)
-        m_layout->setRowStretch(r, 0);
-    for (int c = 0; c < m_layout->columnCount(); ++c)
-        m_layout->setColumnStretch(c, 0);
+    for (int r = 0; r < d->layout->rowCount(); ++r)
+        d->layout->setRowStretch(r, 0);
+    for (int c = 0; c < d->layout->columnCount(); ++c)
+        d->layout->setColumnStretch(c, 0);
 
     const int n = m_cellViews.size();
     const int columns = std::max(1, m_engine.layout().cols);
@@ -39,9 +39,9 @@ void CompareWorkspace::relayoutGridKeepingPanes()
             continue;
         const int row = i / columns;
         const int col = i % columns;
-        m_layout->addWidget(pane, row, col);
-        m_layout->setRowStretch(row, 1);
-        m_layout->setColumnStretch(col, 1);
+        d->layout->addWidget(pane, row, col);
+        d->layout->setRowStretch(row, 1);
+        d->layout->setColumnStretch(col, 1);
     }
 
     schedulePostLayoutFit();
@@ -160,7 +160,7 @@ void CompareWorkspace::onSwapPanes()
     if (static_cast<size_t>(b) < m_cellAdjusts.size())
         std::swap(m_cellAdjusts[0], m_cellAdjusts[static_cast<size_t>(b)]);
 
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool blinkActive = d->blinkChk && d->blinkChk->isChecked();
     if (blinkActive)
     {
         rebuildCells();
@@ -207,7 +207,7 @@ void CompareWorkspace::onSwapPanes()
         updateTemporaryCompareAvailability();
     }
 
-    if (m_sidePanel && m_sidePanel->isVisible())
+    if (d->sidePanel && d->sidePanel->isVisible())
         refreshHistograms();
     update();
 
@@ -223,12 +223,12 @@ void CompareWorkspace::onSwapPanes()
 
 void CompareWorkspace::onLayoutChanged()
 {
-    if (!m_layoutCombo)
+    if (!d->layoutCombo)
         return;
-    const int idx = m_layoutCombo->currentIndex();
+    const int idx = d->layoutCombo->currentIndex();
     const bool custom = (idx == 6); // custom M×N
-    if (m_gridColsSpin)
-        m_gridColsSpin->setEnabled(custom);
+    if (d->gridColsSpin)
+        d->gridColsSpin->setEnabled(custom);
     syncContextualCompareControls();
     if (m_sessionState)
         m_sessionState->setLayoutPreset(idx);
@@ -253,7 +253,7 @@ void CompareWorkspace::onLayoutChanged()
         break; // one row
     case 6:
         // A-4.2: custom grid — columns from spin; rows derived by engine.
-        cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+        cols = d->gridColsSpin ? d->gridColsSpin->value() : 2;
         break;
     default:
         cols = 0;
@@ -271,16 +271,16 @@ void CompareWorkspace::onLayoutChanged()
     schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
-    if (m_sidePanel && m_sidePanel->isVisible())
+    if (d->sidePanel && d->sidePanel->isVisible())
         refreshHistograms();
 }
 
 void CompareWorkspace::onCustomGridChanged()
 {
-    if (!m_layoutCombo || m_layoutCombo->currentIndex() != 6)
+    if (!d->layoutCombo || d->layoutCombo->currentIndex() != 6)
         return;
     // Re-apply custom columns; rows are informational (engine packs by cols).
-    const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+    const int cols = d->gridColsSpin ? d->gridColsSpin->value() : 2;
     m_engine.setColumns(cols);
     if (m_displayManager)
         m_displayManager->setColumns(cols);
