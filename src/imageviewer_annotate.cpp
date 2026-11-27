@@ -2,6 +2,7 @@
 // image coordinates, persisted next to the source, and burned into an exported
 // review image.
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "core/image/QtConvert.h"
 #include "widgets/blindtestdialog.h"
@@ -18,23 +19,23 @@
 
 void ImageViewer::setAnnotateMode(bool on)
 {
-    if (m_annotateMode == on)
+    if (d->annotate.mode == on)
         return;
-    m_annotateMode = on;
+    d->annotate.mode = on;
     if (on)
     {
         ensureAnnotationsForCurrentPath();
         setProfileMode(false); // one drawing tool at a time
     }
     if (!on)
-        m_annotating = false;
+        d->annotate.annotating = false;
     setCursor(on ? Qt::CrossCursor : Qt::OpenHandCursor);
     update();
 }
 
 bool ImageViewer::isAnnotateMode() const
 {
-    return m_annotateMode;
+    return d->annotate.mode;
 }
 
 void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
@@ -44,7 +45,7 @@ void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QActi
 {
     annotate = menu.addAction(tr("Annotate (A)"));
     annotate->setCheckable(true);
-    annotate->setChecked(m_annotateMode);
+    annotate->setChecked(d->annotate.mode);
     annotate->setEnabled(hasView);
     textLabel = menu.addAction(tr("Add Text Label (T)"));
     textLabel->setEnabled(hasView);
@@ -56,7 +57,7 @@ void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QActi
     blindTest->setEnabled(hasView);
     spectrum = menu.addAction(tr("FFT Spectrum"));
     spectrum->setCheckable(true);
-    spectrum->setChecked(m_spectrumVisible);
+    spectrum->setChecked(d->tools.spectrumVisible);
     spectrum->setEnabled(hasView);
     cvBoxes = menu.addAction(tr("Load CV Boxes…"));
     cvBoxes->setEnabled(hasView);
@@ -68,7 +69,7 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
 {
     if (chosen == annotate)
     {
-        setAnnotateMode(!m_annotateMode);
+        setAnnotateMode(!d->annotate.mode);
         return true;
     }
     if (chosen == textLabel)
@@ -95,7 +96,7 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
     }
     if (chosen == spectrum)
     {
-        setSpectrumVisible(!m_spectrumVisible);
+        setSpectrumVisible(!d->tools.spectrumVisible);
         return true;
     }
     if (chosen == cvBoxes)
@@ -111,7 +112,7 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
 
 void ImageViewer::drawAnnotations(QPainter &painter) const
 {
-    if (!m_annotateMode || m_view.scale <= 0.0)
+    if (!d->annotate.mode || m_view.scale <= 0.0)
         return;
     // Markup is stored in image coordinates, so it is transformed by the same
     // view matrix as the photo.
@@ -122,7 +123,7 @@ void ImageViewer::drawAnnotations(QPainter &painter) const
         return QPointF(p.x() * m_view.scale + m_view.offsetX,
                        p.y() * m_view.scale + m_view.offsetY);
     };
-    const QVector<mviewer::ui::Annotation> items = m_annotations.annotations();
+    const QVector<mviewer::ui::Annotation> items = d->annotate.store.annotations();
     for (const mviewer::ui::Annotation &a : items)
     {
         painter.setPen(QPen(a.color, 2));
@@ -138,26 +139,26 @@ void ImageViewer::drawAnnotations(QPainter &painter) const
                 painter.drawText(toScreen(a.rect.topLeft()), a.text);
         }
     }
-    if (m_annotating)
+    if (d->annotate.annotating)
     {
         painter.setPen(QPen(QColor(255, 200, 40), 2));
-        painter.drawLine(m_annStart, m_annEnd);
+        painter.drawLine(d->annotate.start, d->annotate.end);
     }
     painter.restore();
 }
 
 void ImageViewer::ensureAnnotationsForCurrentPath()
 {
-    if (m_annotations.sourcePath() == m_currentPath)
+    if (d->annotate.store.sourcePath() == m_currentPath)
         return;
-    m_annotations.setSourcePath(m_currentPath);
-    m_annotations.load();
+    d->annotate.store.setSourcePath(m_currentPath);
+    d->annotate.store.load();
 }
 
 void ImageViewer::handleAnnotateMouseEvent(QMouseEvent *event, int phase)
 {
     ensureAnnotationsForCurrentPath();
-    if (!m_annotateMode)
+    if (!d->annotate.mode)
         return;
     const QPointF imagePoint((event->pos().x() - m_view.offsetX) / m_view.scale,
                              (event->pos().y() - m_view.offsetY) / m_view.scale);
@@ -169,50 +170,50 @@ void ImageViewer::handleAnnotateMouseEvent(QMouseEvent *event, int phase)
         // Right button removes the topmost annotation under the cursor.
         if (event->button() == Qt::RightButton)
         {
-            const int hit = m_annotations.indexAt(imagePoint);
+            const int hit = d->annotate.store.indexAt(imagePoint);
             if (hit >= 0)
             {
                 // Single-level undo for a mis-click (Ctrl+Shift+Z restores it).
-                m_lastRemoved = m_annotations.annotations().at(hit);
-                m_lastRemovedValid = true;
-                m_annotations.removeAt(hit);
-                m_annotations.save();
+                d->annotate.lastRemoved = d->annotate.store.annotations().at(hit);
+                d->annotate.lastRemovedValid = true;
+                d->annotate.store.removeAt(hit);
+                d->annotate.store.save();
                 update();
             }
             return;
         }
         if (event->button() != Qt::LeftButton)
             return;
-        m_annotating = true;
-        m_annStart = m_annEnd = event->pos();
-        m_annotateArrow = event->modifiers().testFlag(Qt::ShiftModifier);
+        d->annotate.annotating = true;
+        d->annotate.start = d->annotate.end = event->pos();
+        d->annotate.arrow = event->modifiers().testFlag(Qt::ShiftModifier);
         update();
         return;
     }
 
     if (phase == 1)
     {
-        if (!m_annotating)
+        if (!d->annotate.annotating)
             return;
-        m_annEnd = event->pos();
+        d->annotate.end = event->pos();
         update();
         return;
     }
 
     // phase == 2: release commits the primitive.
-    if (!m_annotating)
+    if (!d->annotate.annotating)
         return;
-    m_annotating = false;
+    d->annotate.annotating = false;
     if (event->button() != Qt::LeftButton)
         return;
-    const QLineF line(QPointF((m_annStart.x() - m_view.offsetX) / m_view.scale,
-                              (m_annStart.y() - m_view.offsetY) / m_view.scale),
+    const QLineF line(QPointF((d->annotate.start.x() - m_view.offsetX) / m_view.scale,
+                              (d->annotate.start.y() - m_view.offsetY) / m_view.scale),
                       imagePoint);
     if (line.length() < 2.0)
         return;
 
     mviewer::ui::Annotation a;
-    if (m_annotateArrow)
+    if (d->annotate.arrow)
     {
         a.kind = mviewer::ui::AnnotationKind::Arrow;
         a.line = line;
@@ -222,8 +223,8 @@ void ImageViewer::handleAnnotateMouseEvent(QMouseEvent *event, int phase)
         a.kind = mviewer::ui::AnnotationKind::Rect;
         a.rect = QRectF(line.p1(), line.p2()).normalized();
     }
-    m_annotations.add(a);
-    m_annotations.save();
+    d->annotate.store.add(a);
+    d->annotate.store.save();
     update();
 }
 
@@ -244,7 +245,7 @@ void ImageViewer::exportAnnotatedImage()
     }
     canvas = canvas.convertToFormat(QImage::Format_ARGB32);
 
-    const QVector<mviewer::ui::Annotation> items = m_annotations.annotations();
+    const QVector<mviewer::ui::Annotation> items = d->annotate.store.annotations();
     QPainter p(&canvas);
     p.setRenderHint(QPainter::Antialiasing, true);
     for (const mviewer::ui::Annotation &a : items)
@@ -293,7 +294,7 @@ void ImageViewer::exportAnnotatedImage()
             tr("Could not write the review image") + QStringLiteral(": ") + destination, 5000);
         return;
     }
-    if (!m_annotations.save())
+    if (!d->annotate.store.save())
     {
         emit statusMessageRequested(tr("Review image saved, but the annotation sidecar was not"),
                                     5000);
@@ -305,12 +306,12 @@ void ImageViewer::exportAnnotatedImage()
 
 void ImageViewer::restoreRemovedAnnotation()
 {
-    if (!m_lastRemovedValid)
+    if (!d->annotate.lastRemovedValid)
         return;
     ensureAnnotationsForCurrentPath();
-    m_annotations.add(m_lastRemoved);
-    m_annotations.save();
-    m_lastRemovedValid = false;
+    d->annotate.store.add(d->annotate.lastRemoved);
+    d->annotate.store.save();
+    d->annotate.lastRemovedValid = false;
     update();
     emit statusMessageRequested(tr("Annotation restored"), 2500);
 }
@@ -318,7 +319,7 @@ void ImageViewer::restoreRemovedAnnotation()
 void ImageViewer::addTextAnnotationAtCursor()
 {
     ensureAnnotationsForCurrentPath();
-    if (!m_annotateMode || !hasDisplayImage() || m_view.scale <= 0.0)
+    if (!d->annotate.mode || !hasDisplayImage() || m_view.scale <= 0.0)
         return;
     int ix = m_lastHoverX;
     int iy = m_lastHoverY;
@@ -336,7 +337,7 @@ void ImageViewer::addTextAnnotationAtCursor()
     a.kind = mviewer::ui::AnnotationKind::Text;
     a.text = text.trimmed();
     a.rect = QRectF(ix, iy, 1, 1);
-    m_annotations.add(a);
-    m_annotations.save();
+    d->annotate.store.add(a);
+    d->annotate.store.save();
     update();
 }

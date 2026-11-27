@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 #include "metadataoverlay.h"
 #include "shortcutdigits.h"
 
@@ -594,14 +595,14 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     // L draws a line profile; W opens the scopes and then cycles their mode.
     if (key == Qt::Key_L && modifiers == Qt::NoModifier)
     {
-        setProfileMode(!m_profileMode);
-        emit statusMessageRequested(m_profileMode ? tr("Line profile: drag a line on the image")
+        setProfileMode(!d->profile.mode);
+        emit statusMessageRequested(d->profile.mode ? tr("Line profile: drag a line on the image")
                                                   : tr("Line profile off"));
         return true;
     }
     if (key == Qt::Key_W && modifiers == Qt::NoModifier)
     {
-        if (!m_scopesVisible)
+        if (!d->scope.visible)
             setScopesVisible(true);
         else
             cycleScopeMode();
@@ -610,9 +611,9 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     // A draws review markup; T drops a text label at the cursor.
     if (key == Qt::Key_A && modifiers == Qt::NoModifier)
     {
-        setAnnotateMode(!m_annotateMode);
+        setAnnotateMode(!d->annotate.mode);
         emit statusMessageRequested(
-            m_annotateMode ? tr("Annotate: drag a box, Shift+drag an arrow, right-click deletes")
+            d->annotate.mode ? tr("Annotate: drag a box, Shift+drag an arrow, right-click deletes")
                            : tr("Annotate off"));
         return true;
     }

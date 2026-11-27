@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.232** · Release tag: **v1.0.232**
+> Snapshot: 2026-11-27 · Version: **1.0.233** · Release tag: **v1.0.233**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,16 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.233 - imageviewer.h off the ceiling via Private, not controllers (2026-11-27)
+
+- Display-raster/neighbour-preload value types move to `imageviewer_displayraster.h`
+  (`ImageViewer` keeps `using` aliases so tests still compile).
+- New `imageviewer_p.h` holds `ImageViewer::Private`; profile / scope / annotate /
+  tool state moves into `d->profile|scope|annotate|tools`. The paint and markup TUs
+  read those fields directly - no callback boundaries invented around them.
+- `imageviewer.h` 801 -> 737 lines; drops `annotationstore.h`, `cvoverlay.h`,
+  `<QLineF>`.
 
 ## 1.0.232 - drag & drop gets its own TU (2026-11-27)
 

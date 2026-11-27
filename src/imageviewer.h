@@ -1,5 +1,4 @@
 #pragma once
-#include "annotationstore.h"
 #include "application/ImageLoadingService.h"
 #include "browsepathindex.h"
 #include "core/analysis/ImageOverlay.h"
@@ -13,13 +12,11 @@
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
-#include "cvoverlay.h"
 #include "gpu/GpuTileUploader.h"
 #include "imageviewer_displayraster.h"
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QImage>
-#include <QLineF>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
 #include <QPixmap>
@@ -49,13 +46,6 @@ namespace mviewer::core
 {
 struct ImageFileRotateResult;
 }
-
-namespace mviewer::ui
-{
-class ScopeWidget;
-class DisplayAdjustPanel;
-class DisplayAdjustController; // owns the adjust panel for this viewer
-} // namespace mviewer::ui
 
 struct ImageViewerPromotedRasterTestAccess;
 
@@ -455,47 +445,12 @@ class ImageViewer : public QOpenGLWidget
                             QRect sourceRect, QSize sourceSize, double density,
                             const mviewer::core::DisplayColorContext &target, bool failed,
                             uint64_t serial);
-    struct DisplayRasterPreloadState
-    {
-        std::atomic<uint64_t> promotedGeneration{0};
-        std::atomic<uint64_t> displaySerial{0}; // serial this preload was promoted into
-        std::atomic<bool> delivered{false};
-        int widgetW = 0, widgetH = 0;
-        double dpr = 1.0;
-        double lockedScale = 0.0; // >0: zoom-lock scale, else fit the neighbor
-        bool maximizeFit = false;
-    };
-    struct DisplayRasterPreloadResult
-    {
-        QString path;
-        uint64_t browseGeneration = 0;
-        std::shared_ptr<DisplayRasterPreloadState> state;
-        std::shared_ptr<mviewer::core::SourceImage> source;
-        QImage image;
-        QRect sourceRect;
-        QSize sourceSize;
-        double density = 1.0;
-        mviewer::core::DisplayColorContext target;
-        bool failed = false;
-    };
-    struct DisplayRasterWarm
-    {
-        QString path;
-        std::shared_ptr<mviewer::core::SourceImage> source;
-        QImage image;
-        QRect sourceRect;
-        QSize sourceSize;
-        double density = 1.0;
-        mviewer::core::DisplayColorContext target;
-        qint64 bytes = 0;
-        uint64_t lastUse = 0;
-    };
-    struct DisplayRasterPreload
-    {
-        QString path;
-        std::shared_ptr<DisplayRasterPreloadState> state;
-        TaskScheduler::TaskHandle handle;
-    };
+    // Value types live in imageviewer_displayraster.h; the aliases keep every
+    // existing call site and test (ImageViewer::DisplayRasterPreloadResult) as-is.
+    using DisplayRasterPreloadState = ::DisplayRasterPreloadState;
+    using DisplayRasterPreloadResult = ::DisplayRasterPreloadResult;
+    using DisplayRasterWarm = ::DisplayRasterWarm;
+    using DisplayRasterPreload = ::DisplayRasterPreload;
     static void runDisplayRasterPreload(const QString &path, uint64_t browseGeneration,
                                         const std::shared_ptr<DisplayRasterPreloadState> &state,
                                         const mviewer::core::DisplayColorContext &target,
@@ -604,11 +559,7 @@ class ImageViewer : public QOpenGLWidget
     // matching neighbor may be promoted; close / destruction cancel all. A
     // cancelled request's transient Result is released, and decoded frame cache
     // ownership remains budgeted by CacheManager.
-    struct NeighborPreload
-    {
-        QString path;
-        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
-    };
+    using NeighborPreload = ::NeighborPreload;
     mviewer::application::ImageLoadingService::AsyncRequestHandle m_foregroundRequest;
     // M47: a neighbor preload matching the current path, retained until the
     // raster-path verdict decides whether an analysis full load is issued
@@ -759,26 +710,11 @@ class ImageViewer : public QOpenGLWidget
 
     bool m_selecting = false;
     bool m_selectMode = false;
-    // Line-profile tool: drag a line, then read RGB/luma along it.
-    bool m_profileMode = false;
-    bool m_profiling = false;
-    QPoint m_profStart, m_profEnd;
-    bool m_profileLineActive = false;
-    QLineF m_profileLineImage;
-    // Video scopes: a corner panel with four switchable views.
-    bool m_scopesVisible = false;
-    int m_scopeMode = 0;
-    mviewer::ui::ScopeWidget *m_scopeWidget = nullptr;
-    // Review markup state; the store reloads itself when the path changes.
-    bool m_annotateMode = false, m_annotating = false, m_annotateArrow = false;
-    QPoint m_annStart, m_annEnd;
-    mviewer::ui::AnnotationStore m_annotations;
-    bool m_lastRemovedValid = false;
-    mviewer::ui::Annotation m_lastRemoved;
-    std::unique_ptr<mviewer::ui::DisplayAdjustController> m_adjust; // lazy; owns the panel
-    bool m_spectrumVisible = false;
-    QWidget *m_spectrumPanel = nullptr;
-    mviewer::ui::CvOverlay m_cvOverlay;
+    // Presentation state for the drawing/markup tools lives in `d` (imageviewer_p.h):
+    // drag endpoints, panel pointers and the annotation/cv-overlay stores. The
+    // paint path reads them directly, so no controller boundary is needed here.
+    struct Private;
+    std::unique_ptr<Private> d; // built in the constructor
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
     QRect m_selectionImage;

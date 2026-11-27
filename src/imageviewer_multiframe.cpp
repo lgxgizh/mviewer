@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "application/ImageLoadingService.h"
 #include "core/image/FrameSequence.h"
@@ -216,10 +217,10 @@ void ImageViewer::applyLoadedFrame(const ImageLoadResult &result, int requestedF
     // frame; the viewport itself deliberately remains unchanged.
     beginImageGeneration();
     m_frame = result.frame;
-    if (m_annotations.sourcePath() != m_currentPath)
+    if (d->annotate.store.sourcePath() != m_currentPath)
     {
-        m_annotations.setSourcePath(m_currentPath);
-        m_annotations.load();
+        d->annotate.store.setSourcePath(m_currentPath);
+        d->annotate.store.load();
     }
     m_sequence = m_frame->sequenceInfo();
     m_frameIndex = m_frame->frameIndex();

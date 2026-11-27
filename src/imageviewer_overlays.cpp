@@ -12,6 +12,7 @@
 // inset to leave that room instead of covering them.
 
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "widgets/displayadjustcontroller.h"
 #include "widgets/scopewidget.h"
@@ -33,26 +34,26 @@ void ImageViewer::layoutFloatingOverlays()
         return;
 
     // ── Bottom-left: the scope widget, lifted clear of the frame pill ───────
-    if (m_scopeWidget && m_scopeWidget->isVisible())
+    if (d->scope.widget && d->scope.widget->isVisible())
     {
         const int w = std::min(320, std::max(160, width() / 3));
         const int h = std::min(220, std::max(120, height() / 3));
         const int bottom = height() - kMargin - kBottomChipHeight;
         const int top = std::max(kMargin + kTopChipHeight, bottom - h);
-        m_scopeWidget->setGeometry(kMargin, std::min(top, bottom - h), w, h);
-        m_scopeWidget->raise();
+        d->scope.widget->setGeometry(kMargin, std::min(top, bottom - h), w, h);
+        d->scope.widget->raise();
     }
 
     // ── Top-right: the FFT spectrum panel ───────────────────────────────────
-    if (m_spectrumPanel && m_spectrumPanel->isVisible())
+    if (d->tools.spectrumPanel && d->tools.spectrumPanel->isVisible())
     {
         const int edge = std::min(240, std::max(160, width() / 4));
-        m_spectrumPanel->setGeometry(width() - edge - kMargin, kMargin, edge, edge + 16);
-        m_spectrumPanel->raise();
+        d->tools.spectrumPanel->setGeometry(width() - edge - kMargin, kMargin, edge, edge + 16);
+        d->tools.spectrumPanel->raise();
     }
 
     // ── Bottom-right: the display-adjustment card ───────────────────────────
-    if (QWidget *panel = m_adjust ? m_adjust->panelWidget() : nullptr)
+    if (QWidget *panel = d->tools.adjust ? d->tools.adjust->panelWidget() : nullptr)
     {
         if (panel->isVisible())
         {

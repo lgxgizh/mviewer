@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ImageOverlay.h"
@@ -144,18 +145,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     drawOverlayBadge(painter);
     drawRawSourceBadge(painter);
     drawSelection(painter);
-    if (m_profileMode && (m_profiling || m_profileLineActive) && m_view.scale > 0.0)
+    if (d->profile.mode && (d->profile.dragging || d->profile.lineActive) && m_view.scale > 0.0)
     {
         // The line profile is a measurement, so it stays on top of the photo in
         // both the in-progress drag and the committed state.
-        const QPointF a = m_profiling
-                              ? QPointF(m_profStart)
-                              : QPointF(m_profileLineImage.x1() * m_view.scale + m_view.offsetX,
-                                        m_profileLineImage.y1() * m_view.scale + m_view.offsetY);
-        const QPointF b = m_profiling
-                              ? QPointF(m_profEnd)
-                              : QPointF(m_profileLineImage.x2() * m_view.scale + m_view.offsetX,
-                                        m_profileLineImage.y2() * m_view.scale + m_view.offsetY);
+        const QPointF a = d->profile.dragging
+                              ? QPointF(d->profile.start)
+                              : QPointF(d->profile.lineImage.x1() * m_view.scale + m_view.offsetX,
+                                        d->profile.lineImage.y1() * m_view.scale + m_view.offsetY);
+        const QPointF b = d->profile.dragging
+                              ? QPointF(d->profile.end)
+                              : QPointF(d->profile.lineImage.x2() * m_view.scale + m_view.offsetX,
+                                        d->profile.lineImage.y2() * m_view.scale + m_view.offsetY);
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, true);
         painter.setPen(QPen(QColor(0, 220, 255), 1.5));

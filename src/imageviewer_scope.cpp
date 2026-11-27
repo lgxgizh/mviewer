@@ -4,6 +4,7 @@
 // mode, otherwise the loaded frame) and never re-decode, so enabling them costs
 // nothing until they are actually shown.
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "core/image/QtConvert.h"
 #include "widgets/scopewidget.h"
@@ -69,17 +70,17 @@ bool ImageViewer::isLockZoom() const
 
 void ImageViewer::setProfileMode(bool on)
 {
-    if (m_profileMode == on)
+    if (d->profile.mode == on)
         return;
-    m_profileMode = on;
+    d->profile.mode = on;
     if (on)
         setAnnotateMode(false); // one drawing tool at a time
     if (!on)
     {
-        m_profiling = false;
-        m_profileLineActive = false;
-        if (m_scopeWidget)
-            m_scopeWidget->clearProfileLine();
+        d->profile.dragging = false;
+        d->profile.lineActive = false;
+        if (d->scope.widget)
+            d->scope.widget->clearProfileLine();
     }
     setCursor(on ? Qt::CrossCursor : Qt::OpenHandCursor);
     syncScopeWidget();
@@ -88,38 +89,38 @@ void ImageViewer::setProfileMode(bool on)
 
 bool ImageViewer::isProfileMode() const
 {
-    return m_profileMode;
+    return d->profile.mode;
 }
 
 void ImageViewer::setScopesVisible(bool visible)
 {
-    if (m_scopesVisible == visible)
+    if (d->scope.visible == visible)
         return;
-    m_scopesVisible = visible;
+    d->scope.visible = visible;
     if (visible)
         syncScopeWidget(); // creates the panel on first use
-    if (m_scopeWidget)
-        m_scopeWidget->setVisible(visible);
+    if (d->scope.widget)
+        d->scope.widget->setVisible(visible);
     update();
 }
 
 bool ImageViewer::isScopesVisible() const
 {
-    return m_scopesVisible;
+    return d->scope.visible;
 }
 
 void ImageViewer::cycleScopeMode()
 {
-    m_scopeMode = (m_scopeMode + 1) % 3;
-    if (m_profileMode && m_profileLineActive)
-        m_scopeMode = 0; // a committed line keeps the panel on the line profile
+    d->scope.mode = (d->scope.mode + 1) % 3;
+    if (d->profile.mode && d->profile.lineActive)
+        d->scope.mode = 0; // a committed line keeps the panel on the line profile
     syncScopeWidget();
     update();
 }
 
 int ImageViewer::scopeMode() const
 {
-    return m_scopeMode;
+    return d->scope.mode;
 }
 
 void ImageViewer::addProfileScopeContextActions(QMenu &menu, QAction *&profile, QAction *&scopes,
@@ -127,11 +128,11 @@ void ImageViewer::addProfileScopeContextActions(QMenu &menu, QAction *&profile, 
 {
     profile = menu.addAction(tr("Line Profile (L)"));
     profile->setCheckable(true);
-    profile->setChecked(m_profileMode);
+    profile->setChecked(d->profile.mode);
     profile->setEnabled(hasView);
     scopes = menu.addAction(tr("Scopes (W)"));
     scopes->setCheckable(true);
-    scopes->setChecked(m_scopesVisible);
+    scopes->setChecked(d->scope.visible);
     scopes->setEnabled(hasView);
 }
 
@@ -140,12 +141,12 @@ bool ImageViewer::handleProfileScopeContextAction(QAction *chosen, QAction *prof
 {
     if (chosen == profile)
     {
-        setProfileMode(!m_profileMode);
+        setProfileMode(!d->profile.mode);
         return true;
     }
     if (chosen == scopes)
     {
-        setScopesVisible(!m_scopesVisible);
+        setScopesVisible(!d->scope.visible);
         return true;
     }
     return false;
@@ -155,38 +156,38 @@ void ImageViewer::handleProfileMouseEvent(QMouseEvent *event, int phase)
 {
     if (phase == 0)
     {
-        if (!m_profileMode || !hasDisplayImage() || m_view.scale <= 0.0)
+        if (!d->profile.mode || !hasDisplayImage() || m_view.scale <= 0.0)
             return;
-        m_profiling = true;
-        m_profStart = m_profEnd = event->pos();
+        d->profile.dragging = true;
+        d->profile.start = d->profile.end = event->pos();
         update();
         return;
     }
     if (phase == 1)
     {
-        if (!m_profiling)
+        if (!d->profile.dragging)
             return;
-        m_profEnd = event->pos();
+        d->profile.end = event->pos();
         update();
         return;
     }
     // phase == 2: release
-    if (!m_profiling)
+    if (!d->profile.dragging)
         return;
-    m_profiling = false;
+    d->profile.dragging = false;
     if (hasDisplayImage() && m_view.scale > 0.0)
     {
-        const QLineF line(QPointF((m_profStart.x() - m_view.offsetX) / m_view.scale,
-                                  (m_profStart.y() - m_view.offsetY) / m_view.scale),
-                          QPointF((m_profEnd.x() - m_view.offsetX) / m_view.scale,
-                                  (m_profEnd.y() - m_view.offsetY) / m_view.scale));
+        const QLineF line(QPointF((d->profile.start.x() - m_view.offsetX) / m_view.scale,
+                                  (d->profile.start.y() - m_view.offsetY) / m_view.scale),
+                          QPointF((d->profile.end.x() - m_view.offsetX) / m_view.scale,
+                                  (d->profile.end.y() - m_view.offsetY) / m_view.scale));
         if (line.length() >= 2.0)
         {
-            m_profileLineImage = line;
-            m_profileLineActive = true;
-            m_scopeMode = 0;
-            if (!m_scopesVisible)
-                m_scopesVisible = true;
+            d->profile.lineImage = line;
+            d->profile.lineActive = true;
+            d->scope.mode = 0;
+            if (!d->scope.visible)
+                d->scope.visible = true;
             syncScopeWidget();
         }
     }
@@ -195,12 +196,12 @@ void ImageViewer::handleProfileMouseEvent(QMouseEvent *event, int phase)
 
 void ImageViewer::syncScopeWidget()
 {
-    if (!m_scopesVisible)
+    if (!d->scope.visible)
         return;
-    if (!m_scopeWidget)
+    if (!d->scope.widget)
     {
-        m_scopeWidget = new mviewer::ui::ScopeWidget(this);
-        m_scopeWidget->hide();
+        d->scope.widget = new mviewer::ui::ScopeWidget(this);
+        d->scope.widget->hide();
     }
 
     QImage src;
@@ -210,14 +211,14 @@ void ImageViewer::syncScopeWidget()
         src = mvcore::toQImageFast(m_frame->pixels());
     if (src.isNull())
         return;
-    m_scopeWidget->setImage(src);
+    d->scope.widget->setImage(src);
 
     using Mode = mviewer::ui::ScopeWidget::Mode;
     Mode mode = Mode::LumaWaveform;
-    switch (m_scopeMode)
+    switch (d->scope.mode)
     {
     case 0:
-        mode = m_profileLineActive ? Mode::LineProfile : Mode::LumaWaveform;
+        mode = d->profile.lineActive ? Mode::LineProfile : Mode::LumaWaveform;
         break;
     case 1:
         mode = Mode::RgbParade;
@@ -226,11 +227,11 @@ void ImageViewer::syncScopeWidget()
         mode = Mode::Vectorscope;
         break;
     }
-    m_scopeWidget->setMode(mode);
-    if (m_profileLineActive)
-        m_scopeWidget->setProfileLine(m_profileLineImage);
+    d->scope.widget->setMode(mode);
+    if (d->profile.lineActive)
+        d->scope.widget->setProfileLine(d->profile.lineImage);
 
     // Bottom-left slot, lifted clear of the frame pill by the shared layout.
     layoutFloatingOverlays();
-    m_scopeWidget->raise();
+    d->scope.widget->raise();
 }

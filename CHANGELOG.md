@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.233] - 2026-11-27
+
+### Refactor — `imageviewer.h` off the 800-line ceiling (no controller interfaces)
+
+Mechanical, access-boundary-preserving move; no behaviour change, all public API
+and tests untouched.
+
+- **Step 1**: the five display-raster/neighbour-preload value types
+  (`DisplayRasterPreloadState/Result/Warm/Preload`, `NeighborPreload`) move to
+  `imageviewer_displayraster.h`; `ImageViewer` keeps `using` aliases so
+  `ImageViewer::DisplayRasterPreloadResult` in tests still resolves.
+- **Step 2**: new `imageviewer_p.h` defines `ImageViewer::Private`, and the
+  presentation state for the drawing/markup tools moves into it
+  (`d->profile`, `d->scope`, `d->annotate`, `d->tools`). Paint/markup TUs keep
+  reading those fields directly through `d->` - deliberately *not* an OOP
+  controller, since they are coupled to the paint path and `Viewport` transforms.
+- `imageviewer.h` goes 801 -> **737** lines and no longer includes
+  `annotationstore.h`, `cvoverlay.h` or `<QLineF>`.
+
 ## [1.0.232] - 2026-11-27
 
 ### Refactor — God-class extraction, round 9

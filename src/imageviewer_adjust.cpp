@@ -2,6 +2,7 @@
 // and a 3D LUT. The panel and its wiring live in DisplayAdjustController; the
 // viewer only keeps the public surface (toggle / is-visible) and forwards.
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "core/image/DisplayAdjust.h"
 #include "core/image/DisplayColorContext.h"
@@ -40,24 +41,24 @@ void ImageViewer::applyDisplayAdjust()
 {
     // The panel mutated the live target; re-publish it so the cache-key change is
     // detected (see ImageViewer::setDisplayColorContext).
-    if (m_adjust)
-        m_adjust->applyCurrent();
+    if (d->tools.adjust)
+        d->tools.adjust->applyCurrent();
     else
         setDisplayColorContext(m_displayColorTarget);
 }
 
 bool ImageViewer::isAdjustPanelVisible() const
 {
-    return m_adjust && m_adjust->isPanelVisible();
+    return d->tools.adjust && d->tools.adjust->isPanelVisible();
 }
 
 void ImageViewer::setAdjustPanelVisible(bool visible)
 {
-    if (!m_adjust)
+    if (!d->tools.adjust)
     {
-        m_adjust = std::make_unique<mviewer::ui::DisplayAdjustController>(this);
-        m_adjust->setAutoAnchored(false); // layoutFloatingOverlays() owns placement
-        m_adjust->attach(
+        d->tools.adjust = std::make_unique<mviewer::ui::DisplayAdjustController>(this);
+        d->tools.adjust->setAutoAnchored(false); // layoutFloatingOverlays() owns placement
+        d->tools.adjust->attach(
             this,
             [this]() { return m_displayColorTarget.adjust; },
             [this](const mviewer::core::DisplayAdjust &adjust)
@@ -72,16 +73,16 @@ void ImageViewer::setAdjustPanelVisible(bool visible)
     }
     if (visible)
     {
-        m_adjust->toggle();
+        d->tools.adjust->toggle();
         if (isAdjustPanelVisible())
         {
             layoutFloatingOverlays();
-            if (auto *panel = m_adjust->panelWidget())
+            if (auto *panel = d->tools.adjust->panelWidget())
                 panel->raise();
         }
     }
-    else if (m_adjust->isPanelVisible())
+    else if (d->tools.adjust->isPanelVisible())
     {
-        m_adjust->toggle();
+        d->tools.adjust->toggle();
     }
 }

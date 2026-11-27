@@ -1,5 +1,6 @@
 // FFT spectrum panel and CV box overlay (report feature 10).
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "core/analysis/Fft2D.h"
 #include "core/image/QtConvert.h"
@@ -75,28 +76,28 @@ QImage spectrumImage(const mviewer::core::Fft2DResult &fft)
 
 void ImageViewer::setSpectrumVisible(bool visible)
 {
-    if (m_spectrumVisible == visible)
+    if (d->tools.spectrumVisible == visible)
         return;
-    m_spectrumVisible = visible;
-    if (visible && !m_spectrumPanel)
+    d->tools.spectrumVisible = visible;
+    if (visible && !d->tools.spectrumPanel)
     {
-        m_spectrumPanel = new QWidget(this);
-        m_spectrumPanel->setObjectName(QStringLiteral("spectrumPanel"));
-        auto *layout = new QVBoxLayout(m_spectrumPanel);
+        d->tools.spectrumPanel = new QWidget(this);
+        d->tools.spectrumPanel->setObjectName(QStringLiteral("spectrumPanel"));
+        auto *layout = new QVBoxLayout(d->tools.spectrumPanel);
         layout->setContentsMargins(4, 4, 4, 4);
-        auto *label = new QLabel(m_spectrumPanel);
+        auto *label = new QLabel(d->tools.spectrumPanel);
         label->setObjectName(QStringLiteral("spectrumImage"));
         label->setAlignment(Qt::AlignCenter);
         layout->addWidget(label);
-        m_spectrumPanel->setWindowTitle(tr("FFT Spectrum"));
+        d->tools.spectrumPanel->setWindowTitle(tr("FFT Spectrum"));
     }
-    if (m_spectrumPanel)
+    if (d->tools.spectrumPanel)
     {
-        m_spectrumPanel->setVisible(visible);
+        d->tools.spectrumPanel->setVisible(visible);
         if (visible)
         {
             layoutFloatingOverlays();
-            m_spectrumPanel->raise();
+            d->tools.spectrumPanel->raise();
             if (m_frame && m_frame->isValid())
             {
                 const int w = m_frame->width();
@@ -107,7 +108,7 @@ void ImageViewer::setSpectrumVisible(bool visible)
                 const int sampledH = (h + stepY - 1) / stepY;
                 const auto fft = mviewer::core::computeFftMagnitude(
                     lumaSamples(m_frame->pixels(), w, h), stride, sampledH);
-                if (QLabel *label = m_spectrumPanel->findChild<QLabel *>())
+                if (QLabel *label = d->tools.spectrumPanel->findChild<QLabel *>())
                 {
                     const QImage image = spectrumImage(fft);
                     if (!image.isNull())
@@ -122,17 +123,17 @@ void ImageViewer::setSpectrumVisible(bool visible)
 void ImageViewer::loadCvBoxes(const QString &path)
 {
     QString error;
-    if (!m_cvOverlay.loadFromJsonFile(path, &error))
+    if (!d->tools.cvOverlay.loadFromJsonFile(path, &error))
     {
         emit statusMessageRequested(tr("CV boxes: cannot read %1").arg(QFileInfo(path).fileName()),
                                     4000);
         return;
     }
-    emit statusMessageRequested(tr("CV boxes: %1 loaded").arg(m_cvOverlay.count()), 4000);
+    emit statusMessageRequested(tr("CV boxes: %1 loaded").arg(d->tools.cvOverlay.count()), 4000);
     update();
 }
 
 void ImageViewer::drawAnalysisOverlay(QPainter &painter) const
 {
-    m_cvOverlay.draw(painter, m_view);
+    d->tools.cvOverlay.draw(painter, m_view);
 }

@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "imageviewer_p.h"
 
 #include "SquareLetterbox.h"
 
@@ -42,7 +43,10 @@
 const double kZoomStep = 1.15;
 
 ImageViewer::ImageViewer(QWidget *parent)
-    : QOpenGLWidget(parent), m_tileRequests(m_tileCache), m_overlayRequests(m_overlayCache)
+    : QOpenGLWidget(parent),
+      m_tileRequests(m_tileCache),
+      m_overlayRequests(m_overlayCache),
+      d(std::make_unique<Private>())
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     setWindowTitle(tr("Image Viewer"));
@@ -589,7 +593,7 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         emit requestDirForward();
         return;
     }
-    if (m_annotateMode && event->button() == Qt::RightButton && hasDisplayImage())
+    if (d->annotate.mode && event->button() == Qt::RightButton && hasDisplayImage())
     {
         handleAnnotateMouseEvent(event, 0);
         return;
@@ -597,9 +601,9 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
     if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
         hasDisplayImage())
     {
-        if (m_annotateMode && event->button() == Qt::LeftButton)
+        if (d->annotate.mode && event->button() == Qt::LeftButton)
             handleAnnotateMouseEvent(event, 0);
-        else if (m_profileMode && event->button() == Qt::LeftButton)
+        else if (d->profile.mode && event->button() == Qt::LeftButton)
             handleProfileMouseEvent(event, 0);
         else if (m_selectMode && event->button() == Qt::LeftButton)
         {
@@ -636,9 +640,9 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         m_selEnd = event->pos();
         update();
     }
-    else if (m_annotating)
+    else if (d->annotate.annotating)
         handleAnnotateMouseEvent(event, 1);
-    else if (m_profiling)
+    else if (d->profile.dragging)
         handleProfileMouseEvent(event, 1);
     else if (m_dragging)
     {
@@ -658,9 +662,9 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
     {
         if (m_selecting && event->button() == Qt::LeftButton)
             commitSelectionDrag();
-        else if (m_annotating && event->button() == Qt::LeftButton)
+        else if (d->annotate.annotating && event->button() == Qt::LeftButton)
             handleAnnotateMouseEvent(event, 2);
-        else if (m_profiling && event->button() == Qt::LeftButton)
+        else if (d->profile.dragging && event->button() == Qt::LeftButton)
             handleProfileMouseEvent(event, 2);
         else
         {
